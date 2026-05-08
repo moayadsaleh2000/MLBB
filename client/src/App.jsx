@@ -4,6 +4,8 @@ import {
   Route,
   Navigate,
 } from "react-router-dom";
+import { useEffect } from "react";
+import { io } from "socket.io-client"; // تأكد إنك عامل npm install socket.io-client
 import "./App.css";
 import Login from "./pages/Login";
 import Home from "./pages/Home";
@@ -12,6 +14,15 @@ import Squad from "./pages/Squad";
 import AllTeams from "./pages/AllTeams";
 import MatchSchedule from "./pages/MatchSchedule";
 import Matches from "./pages/Matches";
+
+// 1. تحديد رابط الـ API بشكل ديناميكي
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
+// 2. إعداد السوكيت ليكون متاحاً في التطبيق
+export const socket = io(API_URL, {
+  transports: ["websocket"],
+  autoConnect: true,
+});
 
 const ProtectedRoute = ({ children }) => {
   const token = localStorage.getItem("token");
@@ -26,6 +37,17 @@ const PublicRoute = ({ children }) => {
 };
 
 function App() {
+  useEffect(() => {
+    // منطق الربط عند تشغيل التطبيق
+    socket.on("connect", () => {
+      console.log("✅ Connected to Server via Socket:", socket.id);
+    });
+
+    return () => {
+      socket.off("connect");
+    };
+  }, []);
+
   return (
     <Router>
       <Routes>

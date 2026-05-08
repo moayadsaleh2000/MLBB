@@ -13,6 +13,9 @@ import {
 } from "react-icons/fa";
 import "./Matches.css";
 
+// استخدام الرابط الديناميكي (يتغير تلقائياً عند الرفع على Vercel)
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
 const Matches = () => {
   const navigate = useNavigate();
   const { state } = useLocation();
@@ -38,7 +41,7 @@ const Matches = () => {
     if (!token) return;
     try {
       const res = await axios.get(
-        "http://localhost:5000/api/tournament/qualifying/queue",
+        `${API_BASE_URL}/api/tournament/qualifying/queue`,
         { headers: { Authorization: `Bearer ${token}` } },
       );
       const data = res.data;
@@ -59,7 +62,7 @@ const Matches = () => {
     if (!token) return;
     try {
       const res = await axios.get(
-        "http://localhost:5000/api/tournament/qualifying/active",
+        `${API_BASE_URL}/api/tournament/qualifying/active`,
         { headers: { Authorization: `Bearer ${token}` } },
       );
 
@@ -79,7 +82,7 @@ const Matches = () => {
     }
   }, [token, fetchQueue]);
 
-  // 3. التحقق من الصلاحية (المسار المحدث)
+  // 3. التحقق من الصلاحية
   useEffect(() => {
     const checkAuth = async () => {
       if (!token) {
@@ -88,12 +91,9 @@ const Matches = () => {
       }
 
       try {
-        const res = await axios.get(
-          "http://localhost:5000/api/tournament/profile",
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          },
-        );
+        const res = await axios.get(`${API_BASE_URL}/api/tournament/profile`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
 
         const user = res.data.user || res.data;
         const role = String(user.role || "").toLowerCase();
@@ -104,8 +104,6 @@ const Matches = () => {
 
         setIsAuthorized(hasAccess);
       } catch (err) {
-        // لا نطرد المستخدم من صفحة الانتظار عند خطأ صلاحيات مؤقت.
-        // نكتفي بتعطيل إجراءات القائد حتى يعود الاتصال طبيعي.
         setIsAuthorized(false);
       } finally {
         setIsCheckingAuth(false);
@@ -116,13 +114,12 @@ const Matches = () => {
     refreshData();
   }, [token, navigate, refreshData]);
 
-  // 4. إعداد السوكيت (النسخة المستقرة)
+  // 4. إعداد السوكيت باستخدام الرابط الديناميكي
   useEffect(() => {
     if (!token || isCheckingAuth) return;
 
-    // منع تكرار الاتصال
     if (!socketRef.current) {
-      socketRef.current = io("http://localhost:5000", {
+      socketRef.current = io(API_BASE_URL, {
         auth: { token },
         transports: ["websocket"],
         reconnection: true,
@@ -158,7 +155,7 @@ const Matches = () => {
     setLoading(true);
     try {
       const res = await axios.post(
-        "http://localhost:5000/api/tournament/qualifying/start",
+        `${API_BASE_URL}/api/tournament/qualifying/start`,
         {},
         { headers: { Authorization: `Bearer ${token}` } },
       );
@@ -187,7 +184,7 @@ const Matches = () => {
       setLoading(true);
       try {
         const { data } = await axios.post(
-          "http://localhost:5000/api/tournament/qualifying/report-win",
+          `${API_BASE_URL}/api/tournament/qualifying/report-win`,
           {
             tournamentId: tournament._id,
             winnerTeamId: team._id || team.id,
@@ -225,7 +222,7 @@ const Matches = () => {
     setLoading(true);
     try {
       const { data } = await axios.post(
-        "http://localhost:5000/api/tournament/qualifying/undo-win",
+        `${API_BASE_URL}/api/tournament/qualifying/undo-win`,
         {
           tournamentId: tournament._id,
           matchIdx: mIdx,
@@ -378,17 +375,7 @@ const Matches = () => {
                     winnerId &&
                     tournament?.status !== "finished" && (
                       <button
-                        style={{
-                          marginTop: "10px",
-                          width: "100%",
-                          padding: "8px 10px",
-                          borderRadius: "10px",
-                          border: "1px solid #d4af37",
-                          background: "transparent",
-                          color: "#d4af37",
-                          cursor: "pointer",
-                          fontWeight: 700,
-                        }}
+                        className="undo-btn-neon"
                         onClick={() =>
                           handleUndoWinner(idx, isLeague ? null : activeRound)
                         }

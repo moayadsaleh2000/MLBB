@@ -13,6 +13,9 @@ import axios from "axios";
 import Swal from "sweetalert2";
 import "./Profile.css";
 
+// 1. تعريف رابط الـ API بشكل ديناميكي
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
 const Profile = () => {
   const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
@@ -20,12 +23,13 @@ const Profile = () => {
   const [loading, setLoading] = useState(true);
 
   const token = localStorage.getItem("token");
-  // روابط الـ API
-  const PROFILE_URL = "http://localhost:5000/api/auth/profile";
-  const TEAM_URL = "http://localhost:5000/api/auth/my-team";
+
+  // 2. تحديث الروابط لتستخدم الـ API_URL الجديد
+  const PROFILE_URL = `${API_URL}/api/auth/profile`;
+  const TEAM_URL = `${API_URL}/api/auth/my-team`;
 
   const [user, setUser] = useState(null);
-  const [currentTeamName, setCurrentTeamName] = useState("SOLO"); // حالة لحفظ اسم الفريق الحالي
+  const [currentTeamName, setCurrentTeamName] = useState("SOLO");
 
   const [formData, setFormData] = useState({
     gameId: "",
@@ -53,15 +57,14 @@ const Profile = () => {
     try {
       const headers = { Authorization: `Bearer ${token}` };
 
-      // جلب بيانات البروفايل وبيانات الفريق في نفس الوقت لضمان الدقة
+      // جلب بيانات البروفايل وبيانات الفريق بشكل متوازي (Parallel)
       const [profileRes, teamRes] = await Promise.all([
         axios.get(PROFILE_URL, { headers }),
-        axios.get(TEAM_URL, { headers }).catch(() => ({ data: null })), // تجنب الخطأ إذا لم يكن لديه فريق
+        axios.get(TEAM_URL, { headers }).catch(() => ({ data: null })),
       ]);
 
       if (profileRes.data) {
         setUser(profileRes.data);
-        // تحديث اسم الفريق من استجابة الـ teamRes الحية
         setCurrentTeamName(teamRes.data ? teamRes.data.name : "SOLO");
 
         setFormData({
@@ -104,7 +107,6 @@ const Profile = () => {
       setUser(res.data);
       setIsEditing(false);
 
-      // لا ننصح بالاعتماد على التخزين المحلي للبيانات، لكن سنحدثها للاحتياط
       localStorage.setItem("user", JSON.stringify(res.data));
 
       Swal.fire({
@@ -165,7 +167,6 @@ const Profile = () => {
           </div>
           <h1 className="user-display-name">
             {user?.username} <span>/</span>{" "}
-            {/* هنا نستخدم الحالة المحدثة للاسم */}
             <small className="team-highlight">{currentTeamName}</small>
           </h1>
         </div>

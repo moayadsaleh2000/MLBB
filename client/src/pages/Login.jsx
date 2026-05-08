@@ -4,11 +4,14 @@ import axios from "axios";
 import Swal from "sweetalert2";
 import "./Login.css";
 
+// 1. تحديد الرابط بشكل ديناميكي (Railway للرفع و Localhost للتطوير)
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
 const Login = () => {
   const navigate = useNavigate();
   const [clickCount, setClickCount] = useState(0);
   const [isLeader, setIsLeader] = useState(false);
-  const [loading, setLoading] = useState(false); // حالة التحميل
+  const [loading, setLoading] = useState(false);
 
   const [formData, setFormData] = useState({
     username: "",
@@ -28,7 +31,6 @@ const Login = () => {
   ];
   const lanes = ["Gold Lane", "EXP Lane", "Mid Lane", "Jungler", "Roamer"];
 
-  // حركة الـ 5 كبسات السرية على العنوان
   const handleTitleClick = () => {
     setClickCount((prev) => prev + 1);
     if (clickCount + 1 === 5) {
@@ -61,7 +63,6 @@ const Login = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // 1. فحص الاسم: أحرف فقط ومسافات
     const nameRegex = /^[a-zA-Z\s\u0600-\u06FF]+$/;
     const cleanUsername = formData.username.trim();
 
@@ -73,21 +74,19 @@ const Login = () => {
       );
     }
 
-    // 2. فحص اللين: ممنوع التكرار
     if (formData.primaryLane === formData.secondaryLane) {
       return Swal.fire("خطأ باللين", "يرجى اختيار مسارين مختلفين", "warning");
     }
 
-    setLoading(true); // بدء التحميل
+    setLoading(true);
     try {
-      // إرسال البيانات للباك إند
-      const res = await axios.post("http://localhost:5000/api/auth/login", {
+      // 2. استخدام المتغير الجديد API_URL هنا
+      const res = await axios.post(`${API_URL}/api/auth/login`, {
         ...formData,
         username: cleanUsername,
         isLeader: isLeader,
       });
 
-      // تخزين البيانات
       localStorage.setItem("token", res.data.token);
       localStorage.setItem("user", JSON.stringify(res.data.user));
 
@@ -101,8 +100,6 @@ const Login = () => {
         color: "#fff",
       });
 
-      // ✅ التعديل هنا: استخدام window.location.href بدلاً من navigate
-      // لضمان إعادة تشغيل App.js وقراءة التوكن الجديد فوراً
       setTimeout(() => {
         window.location.href = "/home";
       }, 1600);
@@ -113,7 +110,7 @@ const Login = () => {
         "error",
       );
     } finally {
-      setLoading(false); // إنهاء التحميل
+      setLoading(false);
     }
   };
 

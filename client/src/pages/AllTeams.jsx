@@ -5,6 +5,9 @@ import { GiShield } from "react-icons/gi";
 import axios from "axios";
 import "./AllTeams.css";
 
+// استخدام الرابط الديناميكي
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
 const AllTeams = () => {
   const navigate = useNavigate();
   const token = localStorage.getItem("token");
@@ -21,14 +24,12 @@ const AllTeams = () => {
 
       try {
         setLoading(true);
-        // جلب الملف الشخصي وبيانات السكواد للتحقق من الصلاحيات
+        const headers = { Authorization: `Bearer ${token}` };
+
+        // جلب الملف الشخصي وبيانات السكواد
         const [profileRes, teamDataRes] = await Promise.all([
-          axios.get("http://localhost:5000/api/auth/profile", {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-          axios.get("http://localhost:5000/api/auth/my-team", {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
+          axios.get(`${API_BASE_URL}/api/auth/profile`, { headers }),
+          axios.get(`${API_BASE_URL}/api/auth/my-team`, { headers }),
         ]);
 
         const user = profileRes.data;
@@ -41,7 +42,7 @@ const AllTeams = () => {
         const coLeaderIds =
           squad?.coLeaders?.map((cl) => String(cl._id || cl)) || [];
 
-        // تحديد ما إذا كان المستخدم يمتلك صلاحية بدء البطولة
+        // التحقق من الصلاحية (قائد أو مساعد)
         const hasAccess =
           user.role === "Leader" ||
           user.role === "Co-Leader" ||
@@ -52,11 +53,11 @@ const AllTeams = () => {
         setIsAuthorized(hasAccess);
 
         if (squad?.members) {
-          // جلب توزيع الفرق المتوازن بناءً على أعضاء السكواد
+          // استدعاء منطق توزيع الفرق المتوازن (Matchmaking Logic)
           const res = await axios.post(
-            "http://localhost:5000/api/auth/matchmaking/balance",
+            `${API_BASE_URL}/api/auth/matchmaking/balance`,
             { members: squad.members },
-            { headers: { Authorization: `Bearer ${token}` } },
+            { headers },
           );
           if (res.data.success) {
             setTeams(res.data.teams || []);
@@ -73,11 +74,10 @@ const AllTeams = () => {
 
   const handleStartTournament = async (mode) => {
     try {
-      // تجهيز البيانات لإرسالها للسيرفر بـ IDs نظيفة
+      // تنظيف الـ IDs لضمان عدم حدوث خطأ في الـ Backend
       const preparedTeams = teams.map((team, index) => {
         const teamId =
           team._id || (team.players && team.players[0]?._id) || `temp-${index}`;
-
         return {
           _id: String(teamId),
           name: team.name || `فريق ${index + 1}`,
@@ -89,17 +89,14 @@ const AllTeams = () => {
         };
       });
 
-      console.log("🚀 إرسال البيانات للبطولة:", { mode, teams: preparedTeams });
-
-      // إنشاء البطولة في السيرفر
+      // إنشاء البطولة
       const res = await axios.post(
-        "http://localhost:5000/api/tournament/create",
+        `${API_BASE_URL}/api/tournament/create`,
         { mode, teams: preparedTeams },
         { headers: { Authorization: `Bearer ${token}` } },
       );
 
-      // التعديل الجوهري: التوجيه باستخدام الـ ID في الرابط (Dynamic Routing)
-      // هذا يضمن توافق الرابط مع إعدادات App.js الجديدة
+      // التوجيه للجدول الزمني للبطولة المنشأة حديثاً
       if (res.data && res.data._id) {
         navigate(`/match-schedule/${res.data._id}`, { state: res.data });
       } else {
@@ -110,11 +107,7 @@ const AllTeams = () => {
         "Tournament Start Error:",
         err.response?.data || err.message,
       );
-      alert(
-        err.response?.data?.error ||
-          err.response?.data?.message ||
-          "حدث خطأ أثناء بدء البطولة.",
-      );
+      alert(err.response?.data?.error || "حدث خطأ أثناء بدء البطولة.");
     }
   };
 

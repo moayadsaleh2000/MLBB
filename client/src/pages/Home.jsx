@@ -17,6 +17,9 @@ import Swal from "sweetalert2";
 import { io } from "socket.io-client";
 import "./Home.css";
 
+// 1. تحديد الرابط بشكل ديناميكي
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
 const Home = () => {
   const navigate = useNavigate();
 
@@ -33,7 +36,7 @@ const Home = () => {
 
   const token = localStorage.getItem("token");
 
-  // 1. دالة جلب البيانات الأساسية (تُستدعى عند حدوث أي تغيير في السيرفر)
+  // 2. تحديث دوال جلب البيانات لاستخدام API_URL
   const fetchDashboardData = useCallback(async () => {
     try {
       if (!token) {
@@ -44,28 +47,25 @@ const Home = () => {
       const headers = { Authorization: `Bearer ${token}` };
 
       // جلب بيانات البروفايل
-      const resUser = await axios.get(
-        "http://localhost:5000/api/tournament/profile",
-        { headers },
-      );
+      const resUser = await axios.get(`${API_URL}/api/tournament/profile`, {
+        headers,
+      });
       const currentUser = resUser.data;
       setUser(currentUser);
 
       // جلب أفضل السكوادات
-      const resTeams = await axios.get(
-        "http://localhost:5000/api/tournament/teams",
-        { headers },
-      );
+      const resTeams = await axios.get(`${API_URL}/api/tournament/teams`, {
+        headers,
+      });
       const officialSquads = resTeams.data.filter(
         (team) => team.isTemporary === false,
       );
       setDisplayTeams(officialSquads.slice(0, 4));
 
       // جلب بيانات سكواد المستخدم
-      const resMyTeam = await axios.get(
-        "http://localhost:5000/api/tournament/my-team",
-        { headers },
-      );
+      const resMyTeam = await axios.get(`${API_URL}/api/tournament/my-team`, {
+        headers,
+      });
       const teamData = resMyTeam.data;
 
       if (teamData) {
@@ -73,12 +73,9 @@ const Home = () => {
         const currentUserId = currentUser._id || currentUser.id;
         const leaderId = teamData.leader?._id || teamData.leader;
 
-        // التحقق من وجود طلبات انضمام للقائد
         if (currentUserId === leaderId) {
           const reqRes = await axios
-            .get("http://localhost:5000/api/tournament/team/requests", {
-              headers,
-            })
+            .get(`${API_URL}/api/tournament/team/requests`, { headers })
             .catch(() => ({ data: [] }));
 
           if (reqRes.data && reqRes.data.length > 0) setHasNewNotif(true);
@@ -86,9 +83,8 @@ const Home = () => {
 
         if (teamData.announcement) setHasNewNotif(true);
 
-        // جلب حالة الطابور (Queue)
         const resQueue = await axios.get(
-          "http://localhost:5000/api/tournament/qualifying/queue",
+          `${API_URL}/api/tournament/qualifying/queue`,
           { headers },
         );
         setQueueCount(resQueue.data.queueCount);
@@ -96,9 +92,8 @@ const Home = () => {
           (resQueue.data.teams || []).some((t) => t._id === teamData._id),
         );
 
-        // جلب حالة البطولة النشطة
         const resActive = await axios.get(
-          "http://localhost:5000/api/tournament/qualifying/active",
+          `${API_URL}/api/tournament/qualifying/active`,
           { headers },
         );
         setActiveTournament(resActive.data);
@@ -115,24 +110,20 @@ const Home = () => {
     }
   }, [token, navigate]);
 
-  // 2. دوال القبول والرفض للطلبات
+  // 3. تحديث دوال القبول والرفض
   const handleAcceptRequest = useCallback(
     async (userId) => {
       try {
         const headers = { Authorization: `Bearer ${token}` };
         await axios.post(
-          `http://localhost:5000/api/tournament/team/respond`,
+          `${API_URL}/api/tournament/team/respond`,
           { userId, action: "accept" },
           { headers },
         );
         Swal.fire("تم القبول", "المحارب انضم لصفوفكم!", "success");
         fetchDashboardData();
       } catch (err) {
-        Swal.fire(
-          "فشل",
-          err.response?.data?.error || "حدث خطأ أثناء قبول الطلب",
-          "error",
-        );
+        Swal.fire("فشل", err.response?.data?.error || "حدث خطأ", "error");
       }
     },
     [token, fetchDashboardData],
@@ -143,11 +134,11 @@ const Home = () => {
       try {
         const headers = { Authorization: `Bearer ${token}` };
         await axios.post(
-          `http://localhost:5000/api/tournament/team/respond`,
+          `${API_URL}/api/tournament/team/respond`,
           { userId, action: "reject" },
           { headers },
         );
-        Swal.fire("تم الرفض", "تم إبعاد المحارب عن السكواد", "info");
+        Swal.fire("تم الرفض", "تم إبعاد المحارب", "info");
         fetchDashboardData();
       } catch (err) {
         Swal.fire("فشل", "حدث خطأ أثناء رفض الطلب", "error");
@@ -165,14 +156,12 @@ const Home = () => {
     };
   }, [handleAcceptRequest, handleRejectRequest]);
 
-  // 3. Socket.io Logic (التعديل هنا للمزامنة اللحظية)
+  // 4. تحديث Socket.io ليستخدم API_URL
   useEffect(() => {
     fetchDashboardData();
-    const socket = io("http://localhost:5000", { auth: { token } });
+    const socket = io(API_URL, { auth: { token } });
 
-    // الاستماع لحدث تحديث النقاط (عند انتهاء البطولة في السيرفر)
     socket.on("pointsUpdated", () => {
-      console.log("🏆 Points update signal received. Refreshing...");
       fetchDashboardData();
     });
 
@@ -198,7 +187,6 @@ const Home = () => {
       setHasNewNotif(true);
     });
 
-    // تحديث احتياطي كل دقيقة
     const interval = setInterval(fetchDashboardData, 60000);
 
     return () => {
@@ -207,7 +195,6 @@ const Home = () => {
     };
   }, [fetchDashboardData, token, navigate]);
 
-  // 4. منطق ترتيب وعرض الأعضاء
   const visibleMembers = useMemo(() => {
     if (!myFullTeam || !myFullTeam.members) return [];
     const sorted = [...myFullTeam.members].sort(
@@ -216,7 +203,6 @@ const Home = () => {
     return showAllMembers ? sorted : sorted.slice(0, 10);
   }, [myFullTeam, showAllMembers]);
 
-  // 5. معالجة النقر على الإشعارات
   const handleBellClick = async () => {
     setHasNewNotif(false);
     const currentUserId = user._id || user.id;
@@ -237,10 +223,9 @@ const Home = () => {
 
     try {
       const headers = { Authorization: `Bearer ${token}` };
-      const res = await axios.get(
-        "http://localhost:5000/api/tournament/team/requests",
-        { headers },
-      );
+      const res = await axios.get(`${API_URL}/api/tournament/team/requests`, {
+        headers,
+      });
       const requests = res.data;
 
       if (requests.length === 0) {
@@ -285,14 +270,8 @@ const Home = () => {
     }
   };
 
-  // 6. التحسين الجديد لزر الكأس
   const handleQualifyingClick = async () => {
-    if (activeTournament) {
-      navigate("/matches");
-      return;
-    }
-
-    if (isInQueue) {
+    if (activeTournament || isInQueue) {
       navigate("/matches");
       return;
     }
@@ -300,13 +279,12 @@ const Home = () => {
     try {
       const headers = { Authorization: `Bearer ${token}` };
       await axios.post(
-        "http://localhost:5000/api/tournament/register-qualifying",
+        `${API_URL}/api/tournament/register-qualifying`,
         {},
         { headers },
       );
 
       setIsInQueue(true);
-
       Swal.fire({
         title: '<span style="color: #d4af37;">تم دخول الساحة</span>',
         text: "أنت الآن في قائمة الانتظار، جاري تحويلك...",
@@ -388,9 +366,7 @@ const Home = () => {
           </div>
           {canAccessTournament && (
             <div
-              className={`action-item qualifying-btn ${
-                isInQueue ? "in-queue-active" : ""
-              } ${activeTournament ? "tournament-live-glow" : ""}`}
+              className={`action-item qualifying-btn ${isInQueue ? "in-queue-active" : ""} ${activeTournament ? "tournament-live-glow" : ""}`}
               onClick={handleQualifyingClick}
               title={
                 activeTournament
@@ -517,12 +493,10 @@ const Home = () => {
               <FaMedal className="gold-icon" />
               <h3>{showAllMembers ? "ALL WARRIORS" : "SQUAD TOP 10"}</h3>
             </div>
-
             {myFullTeam?.members?.length > 10 && (
               <div
                 className="toggle-view-btn"
                 onClick={() => setShowAllMembers(!showAllMembers)}
-                title={showAllMembers ? "Show Top 10" : "Show All Members"}
                 style={{
                   cursor: "pointer",
                   color: "#d4af37",

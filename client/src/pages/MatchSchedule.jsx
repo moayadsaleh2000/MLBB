@@ -5,7 +5,6 @@ import Swal from "sweetalert2";
 import {
   FaArrowLeft,
   FaTrophy,
-  FaPlay,
   FaCheckCircle,
   FaKhanda,
   FaTable,
@@ -13,6 +12,9 @@ import {
   FaBolt,
 } from "react-icons/fa";
 import "./MatchSchedule.css";
+
+// استخدام الرابط الديناميكي: سيقرأ من ملف .env عند الرفع أو يستخدم الـ localhost للتطوير
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 const MatchSchedule = () => {
   const navigate = useNavigate();
@@ -25,14 +27,15 @@ const MatchSchedule = () => {
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [showTieBreakerBtn, setShowTieBreakerBtn] = useState(false);
 
-  // استخدام useRef لمنع تداخل طلبات الـ Refresh المتكررة (حل مشكلة الـ Pending)
   const isRefreshing = useRef(false);
 
+  // تنسيق اسم الفريق (إزالة الزوائد)
   const formatTeamName = (name) => {
     if (!name) return "TBD";
     return name.split(" - ")[0];
   };
 
+  // التحقق من وجود تعادل في نظام الدوري
   const checkTieCondition = useCallback((data) => {
     if (data.systemType === "league" && data.status === "active") {
       const allDone = data.leagueMatches?.every((m) => m.winner);
@@ -40,6 +43,7 @@ const MatchSchedule = () => {
     }
   }, []);
 
+  // تحديث بيانات البطولة من السيرفر
   const refreshTournament = useCallback(
     async (showLoading = false) => {
       const tId = tournament?._id || state?._id;
@@ -49,10 +53,9 @@ const MatchSchedule = () => {
         if (showLoading) setLoading(true);
         isRefreshing.current = true;
 
-        const res = await axios.get(
-          `http://localhost:5000/api/tournament/${tId}`,
-          { headers: { Authorization: `Bearer ${token}` } },
-        );
+        const res = await axios.get(`${API_BASE_URL}/api/tournament/${tId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
 
         if (res.data) {
           setTournament(res.data);
@@ -74,23 +77,23 @@ const MatchSchedule = () => {
     const initAuthAndData = async () => {
       try {
         setLoading(true);
-        // طلب البيانات مع التأكد من تحديث حالة الـ Authorized
+        // جلب بيانات الحساب والسكواد للتأكد من الصلاحيات
         const [profileRes, teamDataRes] = await Promise.all([
-          axios.get("http://localhost:5000/api/tournament/profile", {
+          axios.get(`${API_BASE_URL}/api/auth/profile`, {
+            // تم تصحيح المسار ليتوافق مع AllTeams
             headers: { Authorization: `Bearer ${token}` },
           }),
-          axios.get("http://localhost:5000/api/tournament/my-team", {
+          axios.get(`${API_BASE_URL}/api/auth/my-team`, {
             headers: { Authorization: `Bearer ${token}` },
           }),
         ]);
 
-        const user = profileRes.data.user || profileRes.data;
-        const squad = teamDataRes?.data || null;
+        const user = profileRes.data;
+        const squad = teamDataRes.data;
 
         const myId = String(user._id || user.id || "");
         const role = String(user.role || "").toLowerCase();
 
-        // فحص دقيق للصلاحيات
         const leaderIdInSquad = squad?.leader?._id
           ? String(squad.leader._id)
           : String(squad?.leader || "");
@@ -100,9 +103,11 @@ const MatchSchedule = () => {
             typeof cl === "object" ? String(cl._id) : String(cl),
           ) || [];
 
+        // السماح بالتحكم للقائد والمساعدين فقط
         const hasAccess =
           role === "leader" ||
-          role === "admin" ||
+          role === "co-leader" ||
+          user.isLeader === true ||
           myId === leaderIdInSquad ||
           coLeaderIds.includes(myId);
 
@@ -116,47 +121,56 @@ const MatchSchedule = () => {
     };
 
     initAuthAndData();
-    const interval = setInterval(() => refreshTournament(false), 10000); // زيادة الوقت قليلاً لتقليل الـ Pending
+    // تحديث تلقائي كل 10 ثوانٍ لمتابعة النتائج الحية
+    const interval = setInterval(() => refreshTournament(false), 10000);
     return () => clearInterval(interval);
   }, [token, refreshTournament, navigate]);
 
+  // منطق كسر التعادل (Tie Breaker)
   const handleGenerateTieBreaker = async () => {
     if (!isAuthorized || loading) return;
 
     const result = await Swal.fire({
       title: "إنشاء مباراة فاصلة؟",
-      text: "سيتم توليد مواجهة نهائية لكسر التعادل",
+      text: "سيتم توليد مواجهة نهائية لكسر التعادل بين المتصدرين",
       icon: "info",
       showCancelButton: true,
       confirmButtonText: "انطلق",
+      cancelButtonText: "إلغاء",
       background: "#0a0a0c",
       color: "#fff",
+      confirmButtonColor: "#d4af37",
     });
 
     if (result.isConfirmed) {
       setLoading(true);
       try {
         const res = await axios.post(
-          "http://localhost:5000/api/tournament/generate-tiebreaker",
+          `${API_BASE_URL}/api/tournament/generate-tiebreaker`,
           { tournamentId: tournament._id },
           { headers: { Authorization: `Bearer ${token}` } },
         );
         setTournament(res.data);
         setShowTieBreakerBtn(false);
-        Swal.fire("تم!", "تم إنشاء المباراة الفاصلة", "success");
+        Swal.fire("تم!", "تم إنشاء المباراة الفاصلة بنجاح", "success");
       } catch (err) {
-        Swal.fire("خطأ", "فشل إنشاء المباراة", "error");
+        Swal.fire(
+          "خطأ",
+          "فشل إنشاء المباراة، تأكد من وجود تعادل فعلي",
+          "error",
+        );
       } finally {
         setLoading(false);
       }
     }
   };
 
+  // تسجيل فوز فريق
   const handleSetWinner = async (team, mIdx, rIdx = null) => {
     if (!isAuthorized) {
       return Swal.fire({
         title: "🛡️ تنبيه القائد",
-        text: "يجب أن تكون القائد لتعديل النتائج",
+        text: "يجب أن تكون القائد أو مساعد القائد لتعديل النتائج",
         icon: "warning",
         background: "#0a0a0c",
         color: "#fff",
@@ -166,20 +180,22 @@ const MatchSchedule = () => {
     if (loading || tournament.status === "finished") return;
 
     const result = await Swal.fire({
-      title: "تأكيد الفوز",
-      text: `هل فريق ${formatTeamName(team.name)} هو الفائز؟`,
+      title: "تأكيد النتيجة",
+      text: `هل أنت متأكد من فوز فريق ${formatTeamName(team.name)}؟`,
       icon: "question",
       showCancelButton: true,
       confirmButtonText: "نعم، مؤكد",
+      cancelButtonText: "تراجع",
       background: "#0a0a0c",
       color: "#fff",
+      confirmButtonColor: "#28a745",
     });
 
     if (result.isConfirmed) {
       setLoading(true);
       try {
         const { data } = await axios.post(
-          "http://localhost:5000/api/tournament/report-win",
+          `${API_BASE_URL}/api/tournament/report-win`,
           {
             tournamentId: tournament._id,
             winnerTeamId: String(team._id || team.id),
@@ -191,24 +207,26 @@ const MatchSchedule = () => {
 
         setTournament(data);
         checkTieCondition(data);
-        Swal.fire("ممتاز!", "تم تحديث النتيجة", "success");
+        Swal.fire("تم التسجيل", "تم تحديث حالة المواجهة بنجاح", "success");
       } catch (err) {
-        Swal.fire("خطأ", "لم يتم حفظ النتيجة", "error");
+        Swal.fire("خطأ", "فشل في حفظ النتيجة على السيرفر", "error");
       } finally {
         setLoading(false);
       }
     }
   };
 
+  // التراجع عن آخر حركة
   const handleUndo = async () => {
     if (!isAuthorized || loading) return;
 
     const result = await Swal.fire({
-      title: "تراجع؟",
-      text: "سيتم حذف آخر نتيجة مسجلة",
+      title: "تراجع عن النتيجة؟",
+      text: "سيتم حذف آخر نتيجة مسجلة وإعادة فتح المباراة",
       icon: "warning",
       showCancelButton: true,
       confirmButtonText: "تراجع الآن",
+      cancelButtonText: "إلغاء",
       background: "#0a0a0c",
       color: "#fff",
     });
@@ -217,14 +235,14 @@ const MatchSchedule = () => {
       setLoading(true);
       try {
         const res = await axios.post(
-          "http://localhost:5000/api/tournament/undo-match",
+          `${API_BASE_URL}/api/tournament/undo-match`,
           { tournamentId: tournament._id },
           { headers: { Authorization: `Bearer ${token}` } },
         );
         setTournament(res.data);
-        Swal.fire("تم", "تم التراجع عن النتيجة", "success");
+        Swal.fire("تم", "تم إلغاء النتيجة الأخيرة بنجاح", "success");
       } catch (err) {
-        Swal.fire("خطأ", "لا يمكن التراجع حالياً", "error");
+        Swal.fire("خطأ", "لا يوجد جولات مسجلة للتراجع عنها", "error");
       } finally {
         setLoading(false);
       }
@@ -235,6 +253,7 @@ const MatchSchedule = () => {
     return (
       <div className="dark-loader">
         <div className="spinner"></div>
+        <p>جاري تحميل الساحة...</p>
       </div>
     );
 
@@ -359,6 +378,7 @@ const MatchSchedule = () => {
   );
 };
 
+// مكون بطاقة المواجهة (Match Card)
 const MatchCard = ({
   match,
   idx,
@@ -381,8 +401,11 @@ const MatchCard = ({
   return (
     <div className="match-card-wrapper">
       <div className="match-box-ui">
+        {/* فريق A */}
         <div
-          className={`team-slot ${isAuthorized && !winnerId && !loading ? "clickable" : "read-only"} ${winnerId && teamAId === winnerId ? "winner" : ""}`}
+          className={`team-slot ${
+            isAuthorized && !winnerId && !loading ? "clickable" : "read-only"
+          } ${winnerId && teamAId === winnerId ? "winner" : ""}`}
           onClick={() =>
             !winnerId &&
             !loading &&
@@ -395,9 +418,14 @@ const MatchCard = ({
             <FaCheckCircle className="check-icon" />
           )}
         </div>
+
         <div className="vs-divider">VS</div>
+
+        {/* فريق B */}
         <div
-          className={`team-slot ${isAuthorized && !winnerId && !loading ? "clickable" : "read-only"} ${winnerId && teamBId === winnerId ? "winner" : ""}`}
+          className={`team-slot ${
+            isAuthorized && !winnerId && !loading ? "clickable" : "read-only"
+          } ${winnerId && teamBId === winnerId ? "winner" : ""}`}
           onClick={() =>
             !winnerId &&
             !loading &&

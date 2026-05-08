@@ -18,11 +18,14 @@ import axios from "axios";
 import Swal from "sweetalert2";
 import "./Squad.css";
 
+// استخدام رابط الـ API من متغيرات البيئة
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+
 const Squad = () => {
   const navigate = useNavigate();
   const token = localStorage.getItem("token");
 
-  const API_BASE_URL = "http://localhost:5000/api";
   const AUTH_URL = `${API_BASE_URL}/auth`;
   const TOURNAMENT_URL = `${API_BASE_URL}/tournament`;
 
@@ -39,19 +42,19 @@ const Squad = () => {
       setLoading(true);
       const headers = { Authorization: `Bearer ${token}` };
 
-      // 1. جلب بيانات المستخدم
-      const resUser = await axios.get(`${AUTH_URL}/profile`, { headers });
-      setUser(resUser.data);
+      // جلب بيانات المستخدم والسكواد بشكل متوازي
+      const [resUser, resMyTeam] = await Promise.all([
+        axios.get(`${AUTH_URL}/profile`, { headers }),
+        axios
+          .get(`${TOURNAMENT_URL}/my-team`, { headers })
+          .catch(() => ({ data: null })),
+      ]);
 
-      // 2. جلب بيانات الفريق
-      const resMyTeam = await axios.get(`${TOURNAMENT_URL}/my-team`, {
-        headers,
-      });
+      setUser(resUser.data);
 
       if (resMyTeam.data) {
         setTeamData(resMyTeam.data);
-
-        // جلب الإعلان
+        // جلب آخر إعلان للسكواد
         try {
           const resAnn = await axios.get(
             `${TOURNAMENT_URL}/team/announcements/latest`,
@@ -64,7 +67,7 @@ const Squad = () => {
           setAnnouncement(resMyTeam.data.announcement || "");
         }
       } else {
-        // 3. استكشاف الفرق في حال لم يكن لديه فريق
+        // إذا لم يكن لديه فريق، جلب الفرق المتاحة والطلبات المعلقة
         const [resAll, resPending] = await Promise.all([
           axios.get(`${TOURNAMENT_URL}/teams`, { headers }),
           axios
@@ -75,7 +78,7 @@ const Squad = () => {
         setAllTeams(resAll.data || []);
         setPendingRequests(
           resPending.data
-            .filter((r) => r.status === "pending")
+            ?.filter((r) => r.status === "pending")
             .map((r) => r.teamId) || [],
         );
         setTeamData(null);
@@ -96,7 +99,7 @@ const Squad = () => {
     fetchData();
   }, [token, navigate, fetchData]);
 
-  // --- Handlers ---
+  // تحديث الإعلان (أوامر القائد)
   const handleUpdateAnnouncement = async () => {
     const { value: text } = await Swal.fire({
       title: "تحديث أوامر السكواد",
@@ -132,6 +135,7 @@ const Squad = () => {
     }
   };
 
+  // توليد بوتات للسكواد (لأغراض الفحص أو التوازن)
   const handleGenerateBots = async () => {
     try {
       const result = await Swal.fire({
@@ -161,6 +165,7 @@ const Squad = () => {
     }
   };
 
+  // إجراءات الأعضاء (ترقية، طرد)
   const handleMemberAction = (member) => {
     const isCoLeader = teamData.coLeaders?.some(
       (id) => (id._id || id) === member._id,
@@ -171,7 +176,7 @@ const Squad = () => {
       icon: "info",
       showDenyButton: true,
       showCancelButton: true,
-      confirmButtonText: isCoLeader ? "تنزيل رتبة" : "ترقية لـ مساعد",
+      confirmButtonText: isCoLeader ? "تنزيل رتبة" : "ترقية لمساعد",
       denyButtonText: `طرد من السكواد`,
       confirmButtonColor: "#d4af37",
       denyButtonColor: "#ff4d4d",
@@ -205,10 +210,11 @@ const Squad = () => {
     });
   };
 
+  // حذف السكواد
   const handleDisbandTeam = () => {
     Swal.fire({
       title: "حذف السكواد؟",
-      text: "سيتم حذف الفريق نهائياً!",
+      text: "سيتم حذف الفريق نهائياً ولا يمكن التراجع!",
       icon: "warning",
       showCancelButton: true,
       confirmButtonText: "نعم، احذف",
@@ -229,31 +235,7 @@ const Squad = () => {
     });
   };
 
-  const handleLeaveTeam = () => {
-    Swal.fire({
-      title: "مغادرة الفريق؟",
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonText: "نعم، مغادرة",
-      confirmButtonColor: "#ff4d4d",
-      background: "#141a21",
-      color: "#fff",
-    }).then(async (result) => {
-      if (result.isConfirmed) {
-        try {
-          await axios.post(
-            `${TOURNAMENT_URL}/team/leave`,
-            {},
-            { headers: { Authorization: `Bearer ${token}` } },
-          );
-          fetchData();
-        } catch (err) {
-          Swal.fire("خطأ", "فشلت المغادرة", "error");
-        }
-      }
-    });
-  };
-
+  // طلب الانضمام لفريق
   const handleJoinRequest = async (teamId) => {
     try {
       await axios.post(
@@ -281,8 +263,6 @@ const Squad = () => {
 
   const isOwner = user?._id === (teamData?.leader?._id || teamData?.leader);
   const totalMembers = teamData?.members?.length || 0;
-
-  // 🔥 التعديل المهم: استخدام isActive حصراً ليتوافق مع الـ Schema والبروفايل
   const activeCount =
     teamData?.members?.filter((m) => m.isActive === true).length || 0;
 
@@ -304,15 +284,6 @@ const Squad = () => {
               title="حذف السكواد"
             >
               <FaTrashAlt style={{ color: "#ff4d4d" }} />
-            </button>
-          )}
-          {teamData && !isOwner && (
-            <button
-              className="gold-btn-icon leave-btn"
-              onClick={handleLeaveTeam}
-              title="مغادرة السكواد"
-            >
-              <FaSignOutAlt style={{ color: "#ff4d4d" }} />
             </button>
           )}
         </div>
@@ -408,8 +379,6 @@ const Squad = () => {
                   const isMemberCo = teamData.coLeaders?.some(
                     (id) => (id._id || id) === member._id,
                   );
-
-                  // 🔥 التعديل هنا: الاعتماد على isActive فقط
                   const isOnline = member.isActive === true;
 
                   return (
@@ -429,10 +398,10 @@ const Squad = () => {
                         </div>
                         <div className="member-info-text">
                           <span className="m-name-bold">
-                            {member.username}
+                            {member.username}{" "}
                             {isMemberLeader && (
                               <FaCrown className="mini-crown" />
-                            )}
+                            )}{" "}
                             {isMemberCo && (
                               <FaShieldAlt className="mini-shield" />
                             )}
@@ -469,7 +438,7 @@ const Squad = () => {
                   disabled={activeCount < 10}
                   onClick={() => navigate("/matchmaking")}
                 >
-                  <FaMagic />
+                  <FaMagic />{" "}
                   {activeCount >= 10
                     ? "GENERATE BATTLE TEAMS"
                     : `NEED ${10 - activeCount} MORE READY`}
