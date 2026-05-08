@@ -1,0 +1,217 @@
+/* Login.css - Professional Gold & Cyber Edition - Full Responsive Version */
+
+@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap");
+
+/* 1. إعدادات الصفحة الأساسية */
+.login-wrapper {
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  /* تدرج لوني ملكي */
+  background: radial-gradient(circle at center, #1a1a1a 0%, #000000 100%);
+  margin: 0;
+  padding: 15px;
+  box-sizing: border-box;
+  font-family: "Poppins", sans-serif;
+}
+
+/* 2. كرت التسجيل */
+.login-card {
+  background: rgba(25, 25, 25, 0.95);
+  width: 100%;
+  max-width: 420px;
+  padding: 30px 20px;
+  border-radius: 20px;
+  border: 1px solid #d4af37;
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.5),
+    0 0 15px rgba(212, 175, 55, 0.2);
+  backdrop-filter: blur(10px);
+  position: relative;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* حركة لمعان ذهبية خفيفة على الكرت */
+.login-card::before {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: conic-gradient(
+    transparent,
+    rgba(212, 175, 55, 0.1),
+    transparent 30%
+  );
+  animation: rotate 6s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes rotate {
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* 3. العناوين */
+.cyan-text,
+.gold-text {
+  color: #d4af37;
+  text-align: center;
+  font-size: 1.6rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  margin-bottom: 25px;
+  letter-spacing: 2px;
+  text-shadow: 0 0 10px rgba(212, 175, 55, 0.4);
+  position: relative;
+  z-index: 2; /* لضمان ظهور النص فوق طبقة اللمعان */
+}
+
+/* 4. الحقول والمدخلات */
+.input-group {
+  margin-bottom: 18px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  z-index: 2;
+}
+
+.input-group label {
+  color: #d4af37;
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-bottom: 6px;
+  margin-left: 5px;
+  text-transform: uppercase;
+}
+
+.input-group input,
+.input-group select {
+  padding: 14px;
+  background: #121212;
+  border: 1px solid #333;
+  border-radius: 10px;
+  color: #fff;
+  font-size: 16px; /* أساسي لمنع الزوم التلقائي في الموبايل */
+  transition: all 0.3s ease;
+  width: 100%;
+  box-sizing: border-box;
+  outline: none;
+}
+
+.input-group input:focus,
+.input-group select:focus {
+  border-color: #d4af37;
+  background: #1a1a1a;
+  box-shadow: 0 0 10px rgba(212, 175, 55, 0.2);
+}
+
+/* تنسيق الصف المزدوج (Primary/Secondary Lanes) */
+.input-row {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+}
+
+.input-row .input-group {
+  flex: 1;
+}
+
+/* 5. قسم القائد السري */
+.leader-field {
+  border: 2px dashed #d4af37 !important;
+  background: rgba(212, 175, 55, 0.05) !important;
+  padding: 15px;
+  border-radius: 12px;
+  margin-top: 10px;
+  z-index: 2;
+}
+
+/* 6. زر الدخول الذهبي */
+.login-btn {
+  width: 100%;
+  padding: 15px;
+  background: linear-gradient(
+    45deg,
+    #bf953f,
+    #fcf6ba,
+    #b38728,
+    #fbf5b7,
+    #aa771c
+  );
+  background-size: 200% auto;
+  border: none;
+  border-radius: 10px;
+  color: #000;
+  font-weight: 900;
+  font-size: 1.1rem;
+  cursor: pointer;
+  text-transform: uppercase;
+  margin-top: 15px;
+  transition: 0.5s;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+  position: relative;
+  z-index: 2;
+}
+
+.login-btn:hover {
+  background-position: right center;
+  transform: translateY(-2px);
+  box-shadow: 0 0 20px rgba(212, 175, 55, 0.4);
+}
+
+.login-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  filter: grayscale(1);
+}
+
+/* 7. استجابة الهاتف (Responsive Media Queries) */
+@media (max-width: 480px) {
+  .login-card {
+    padding: 25px 15px;
+    border-radius: 15px;
+  }
+
+  .cyan-text,
+  .gold-text {
+    font-size: 1.25rem;
+    margin-bottom: 20px;
+  }
+
+  /* تحويل الحقول بجانب بعضها إلى فوق بعضها في الشاشات الصغيرة */
+  .input-row {
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .input-group {
+    margin-bottom: 15px;
+  }
+
+  .login-btn {
+    padding: 12px;
+    font-size: 1rem;
+  }
+}
+
+/* أنيميشن الدخول */
+.animation-fade-in {
+  animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

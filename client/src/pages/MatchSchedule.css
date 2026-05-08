@@ -1,0 +1,310 @@
+/* --- المتغيرات الأساسية --- */
+:root {
+  --primary-gold: #d4af37;
+  --secondary-gold: #aa8928;
+  --dark-bg: #0a0a0c;
+  --card-bg: #141417;
+  --vs-color: #e74c3c;
+  --text-main: #ffffff;
+  --text-muted: #a0a0a0;
+  --neon-shadow: 0 0 15px rgba(212, 175, 55, 0.3);
+}
+
+/* --- الحاوية الرئيسية --- */
+.arena-wrapper {
+  background-color: var(--dark-bg);
+  min-height: 100vh;
+  color: var(--text-main);
+  font-family: "Segoe UI", Roboto, sans-serif;
+  position: relative;
+  overflow-x: hidden;
+  padding-bottom: 50px;
+}
+
+.bg-vignette {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle, transparent 20%, rgba(0, 0, 0, 0.8) 100%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* --- الهيدر (Navigation) --- */
+.arena-top-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 15px 25px;
+  background: rgba(20, 20, 23, 0.9);
+  border-bottom: 2px solid var(--primary-gold);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  backdrop-filter: blur(10px);
+}
+
+.tournament-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: bold;
+  letter-spacing: 2px;
+  color: var(--primary-gold);
+}
+
+.brand-icon {
+  font-size: 1.5rem;
+}
+
+.nav-controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+/* --- الأزرار --- */
+.home-neon-btn,
+.btn-undo,
+.btn-ignite-nav {
+  cursor: pointer;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+}
+
+.home-neon-btn {
+  background: transparent;
+  color: var(--primary-gold);
+  font-size: 1.4rem;
+  padding: 8px;
+}
+
+.btn-undo {
+  background: rgba(231, 76, 60, 0.1);
+  border: 1px solid var(--vs-color);
+  color: var(--vs-color);
+  padding: 6px 12px;
+  border-radius: 5px;
+  font-size: 0.8rem;
+  font-weight: bold;
+}
+
+.btn-undo:hover {
+  background: var(--vs-color);
+  color: white;
+}
+
+.btn-ignite-nav {
+  background: var(--primary-gold);
+  color: black;
+  padding: 8px 16px;
+  border-radius: 5px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+/* --- الجدولة والتبويبات --- */
+.round-tabs {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin: 25px 0;
+  padding: 0 15px;
+  overflow-x: auto; /* للسماح بالتمرير في الهواتف */
+}
+
+.tab {
+  background: transparent;
+  border: 1px solid #333;
+  color: var(--text-muted);
+  padding: 8px 20px;
+  border-radius: 20px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.tab.active {
+  border-color: var(--primary-gold);
+  color: var(--primary-gold);
+  background: rgba(212, 175, 55, 0.1);
+}
+
+/* --- كروت المباريات --- */
+.matches-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+  padding: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+  z-index: 2;
+  position: relative;
+}
+
+.match-box-ui {
+  background: var(--card-bg);
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid #222;
+  position: relative;
+  transition: transform 0.3s;
+}
+
+.match-box-ui:hover {
+  transform: translateY(-5px);
+  border-color: #444;
+}
+
+.team-slot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 15px;
+  background: #1c1c1f;
+  border-radius: 8px;
+  margin: 5px 0;
+  border-left: 4px solid transparent;
+  transition: all 0.2s;
+}
+
+.team-slot.clickable:hover {
+  background: #252529;
+  border-left-color: var(--primary-gold);
+}
+
+.team-slot.winner {
+  background: rgba(46, 204, 113, 0.1);
+  border-left-color: #2ecc71;
+}
+
+.vs-divider {
+  text-align: center;
+  font-style: italic;
+  font-weight: 900;
+  color: var(--vs-color);
+  margin: 10px 0;
+  font-size: 0.9rem;
+  opacity: 0.6;
+}
+
+.t-name {
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.check-icon {
+  color: #2ecc71;
+  filter: drop-shadow(0 0 5px #2ecc71);
+}
+
+/* --- رسائل الحالة --- */
+.no-matches-msg {
+  text-align: center;
+  padding: 50px;
+  color: var(--text-muted);
+  grid-column: 1 / -1;
+}
+
+/* --- وضع المنتصر (Victory) --- */
+.victory-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.5s;
+}
+
+.victory-card {
+  text-align: center;
+  padding: 40px;
+  border: 2px solid var(--primary-gold);
+  border-radius: 20px;
+  background: var(--card-bg);
+  box-shadow: var(--neon-shadow);
+}
+
+.crown-icon {
+  font-size: 4rem;
+  color: var(--primary-gold);
+  margin-bottom: 20px;
+}
+
+.winner-name {
+  font-size: 2.5rem;
+  margin: 15px 0;
+  text-shadow: 0 0 10px var(--primary-gold);
+}
+
+/* --- الاستجابة للهواتف (Responsive) --- */
+@media (max-width: 768px) {
+  .arena-top-nav {
+    padding: 10px 15px;
+  }
+
+  .tournament-brand span {
+    font-size: 0.8rem;
+  }
+
+  .admin-status {
+    display: none; /* إخفاء النص الطويل في الهواتف */
+  }
+
+  .matches-grid {
+    grid-template-columns: 1fr; /* كرت واحد في كل سطر */
+    padding: 10px;
+  }
+
+  .winner-name {
+    font-size: 1.8rem;
+  }
+
+  .round-tabs {
+    justify-content: flex-start;
+  }
+
+  .btn-undo {
+    padding: 5px 8px;
+    font-size: 0.7rem;
+  }
+}
+
+/* --- Animations --- */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animated-fade {
+  animation: fadeIn 0.8s ease-out;
+}
+
+.start-pulse {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(212, 175, 55, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 15px rgba(212, 175, 55, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(212, 175, 55, 0);
+  }
+}

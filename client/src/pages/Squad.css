@@ -1,0 +1,291 @@
+/* الحاوية الأساسية */
+.squad-page {
+  background: radial-gradient(circle at top, #1a232e 0%, #0a0e14 100%);
+  min-height: 100vh;
+  color: #fff;
+  font-family: "Orbitron", sans-serif;
+  padding-bottom: 30px;
+}
+
+/* الهيدر الاحترافي */
+.squad-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 20px;
+  background: rgba(0, 0, 0, 0.8);
+  border-bottom: 2px solid #d4af37;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  backdrop-filter: blur(10px);
+}
+
+.nav-logo {
+  font-size: 1.2rem;
+  color: #d4af37;
+  text-shadow: 0 0 10px rgba(212, 175, 55, 0.5);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.gold-btn-icon {
+  background: rgba(212, 175, 55, 0.1);
+  border: 1px solid #d4af37;
+  color: #d4af37;
+  padding: 10px;
+  border-radius: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  transition: 0.3s;
+}
+
+.gold-btn-icon:hover {
+  background: #d4af37;
+  color: #000;
+}
+
+/* بطاقة المهمة (Announcement) */
+.mission-card {
+  margin: 20px;
+  background: linear-gradient(
+    145deg,
+    rgba(20, 26, 33, 0.9),
+    rgba(10, 14, 20, 0.9)
+  );
+  border-radius: 15px;
+  padding: 20px;
+  border: 1px solid rgba(212, 175, 55, 0.3);
+  position: relative;
+}
+
+.mission-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  color: #d4af37;
+  font-size: 0.9rem;
+}
+
+.mission-text {
+  color: #aaa;
+  line-height: 1.6;
+  font-size: 0.9rem;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 15px;
+  border-radius: 10px;
+  border-left: 3px solid #d4af37;
+}
+
+/* قائمة الأعضاء - تصميم Member Row */
+.roster-section {
+  padding: 0 20px;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.status-badge {
+  background: #333;
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 0.7rem;
+  color: #888;
+}
+
+.status-badge.ready {
+  background: rgba(0, 255, 136, 0.1);
+  color: #00ff88;
+  border: 1px solid #00ff88;
+}
+
+.member-row-gold {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.03);
+  margin-bottom: 10px;
+  padding: 12px 15px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: 0.3s;
+}
+
+.row-active {
+  background: rgba(212, 175, 55, 0.05);
+  border-left: 4px solid #d4af37;
+}
+
+.member-left {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.member-avatar-wrapper {
+  position: relative;
+}
+
+.member-avatar-wrapper img {
+  width: 45px;
+  height: 45px;
+  border-radius: 50%;
+  border: 2px solid #d4af37;
+}
+
+.status-dot {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid #1a232e;
+}
+
+.status-dot.on {
+  background: #00ff88;
+  box-shadow: 0 0 5px #00ff88;
+}
+.status-dot.off {
+  background: #555;
+}
+
+.member-info-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.m-name-bold {
+  font-weight: bold;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.mini-crown {
+  color: #ffd700;
+}
+.mini-shield {
+  color: #00d4ff;
+}
+
+.m-lane-sub {
+  font-size: 0.7rem;
+  color: #777;
+  margin-top: 2px;
+}
+
+/* أزرار الإدارة */
+.options-btn-gold {
+  background: transparent;
+  border: none;
+  color: #d4af37;
+  font-size: 1.2rem;
+  padding: 10px;
+  cursor: pointer;
+}
+
+/* زر المعركة الكبير في الأسفل */
+.battle-footer {
+  padding: 20px;
+  position: fixed;
+  bottom: 0;
+  width: 100%;
+  background: linear-gradient(to top, #0a0e14 70%, transparent);
+  box-sizing: border-box;
+}
+
+.mega-battle-btn {
+  width: 100%;
+  padding: 18px;
+  border-radius: 15px;
+  border: none;
+  font-family: "Orbitron", sans-serif;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: 0.4s;
+  letter-spacing: 2px;
+}
+
+.mega-battle-btn.active {
+  background: linear-gradient(45deg, #d4af37, #f9d976);
+  color: #000;
+  box-shadow: 0 5px 25px rgba(212, 175, 55, 0.4);
+}
+
+.mega-battle-btn.disabled {
+  background: #222;
+  color: #555;
+  cursor: not-allowed;
+}
+
+/* تصميم مستكشف الفرق (Explorer) */
+.team-card {
+  background: rgba(20, 26, 33, 0.8);
+  margin: 15px;
+  padding: 20px;
+  border-radius: 15px;
+  border: 1px solid rgba(212, 175, 55, 0.2);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.join-btn {
+  background: #d4af37;
+  color: #000;
+  border: none;
+  padding: 10px 15px;
+  border-radius: 8px;
+  font-weight: bold;
+  font-size: 0.8rem;
+}
+
+.pending-btn {
+  background: #333;
+  color: #888;
+}
+
+/* --- Responsive للهواتف --- */
+@media (max-width: 768px) {
+  .squad-nav {
+    padding: 10px 15px;
+  }
+  .nav-logo {
+    font-size: 1rem;
+  }
+
+  .mission-card {
+    margin: 15px 10px;
+  }
+
+  .roster-list-vertical {
+    margin-bottom: 100px; /* مساحة لزر المعركة السفلي */
+  }
+
+  .member-row-gold {
+    padding: 10px;
+  }
+
+  .m-name-bold {
+    font-size: 0.85rem;
+  }
+}
+
+/* تحسين شكل الـ SweetAlert ليتناسب مع الثيم */
+.swal2-popup {
+  border: 1px solid #d4af37 !important;
+  border-radius: 20px !important;
+}

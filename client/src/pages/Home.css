@@ -1,0 +1,248 @@
+/* --- 1. المتغيرات الأساسية --- */
+:root {
+  --primary-gold: #ffcc00;
+  --secondary-cyan: #00f2ff;
+  --bg-dark: #0a0e14;
+  --card-bg: rgba(20, 26, 35, 0.9);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --error-red: #ff4444;
+  --text-gray: #a0aab8;
+  --panel-bg: rgba(15, 20, 28, 0.9);
+}
+
+/* --- 2. التنسيق العام --- */
+.home-wrapper {
+  background: radial-gradient(circle at top, #1a2332 0%, #0a0e14 100%);
+  min-height: 100vh;
+  color: #fff;
+  font-family: "Orbitron", sans-serif;
+  padding-bottom: 40px;
+  overflow-x: hidden; /* لمنع التمرير الأفقي في الموبايل */
+}
+
+/* --- 3. الهيدر (تحسين الموبايل) --- */
+.main-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 20px; /* تقليل الحواف للموبايل */
+  background: rgba(0, 0, 0, 0.9);
+  border-bottom: 2px solid var(--primary-gold);
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  backdrop-filter: blur(10px);
+}
+
+.header-left {
+  display: flex;
+  gap: 12px; /* تقليل المسافات */
+  align-items: center;
+}
+
+.mlbb-logo-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mlbb-icon-main {
+  font-size: 1.8rem !important;
+  color: var(--primary-gold);
+}
+
+.logo-text-box {
+  display: flex;
+  flex-direction: column;
+}
+
+.brand-main {
+  font-weight: 900;
+  font-size: 0.9rem; /* تصغير الخط */
+  letter-spacing: 1px;
+}
+
+.brand-sub {
+  font-size: 0.5rem;
+  color: var(--secondary-cyan);
+}
+
+/* --- 4. أيقونات التفاعل (أزرار مناسبة للمس) --- */
+.action-item {
+  width: 40px !important;
+  height: 40px !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--glass-border);
+  color: var(--text-gray);
+  cursor: pointer;
+  position: relative;
+}
+
+.action-item svg {
+  width: 18px !important;
+  height: 18px !important;
+}
+
+.red-notif-dot {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 8px;
+  height: 8px;
+  background: var(--error-red);
+  border-radius: 50%;
+  box-shadow: 0 0 5px var(--error-red);
+}
+
+/* --- 5. كروت السكواد (Responsive Grid) --- */
+.squads-container {
+  padding: 30px 20px;
+}
+
+.section-label {
+  font-size: 1.2rem;
+  margin-bottom: 25px;
+  color: var(--primary-gold);
+  text-align: center;
+}
+
+.squads-grid-layout {
+  display: grid;
+  /* الموبايل: كرت واحد | التابلت: 2 | الكمبيوتر: 3 أو أكثر */
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.squad-card {
+  background: var(--card-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 15px;
+  padding: 25px !important;
+  text-align: center;
+  transition: transform 0.3s ease;
+}
+
+.active-squad-glow {
+  border-color: var(--primary-gold);
+  box-shadow: 0 0 15px rgba(255, 204, 0, 0.2);
+}
+
+.member-count-badge {
+  background: rgba(0, 242, 255, 0.1);
+  padding: 5px 12px;
+  border-radius: 15px;
+  font-size: 0.75rem;
+  margin: 10px 0 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.squad-action-btn {
+  width: 100%;
+  padding: 12px;
+  background: transparent;
+  border: 1px solid var(--secondary-cyan);
+  color: var(--secondary-cyan);
+  border-radius: 8px;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+.gold-btn {
+  border-color: var(--primary-gold);
+  color: var(--primary-gold);
+}
+
+/* --- 6. جداول الإحصائيات (تعديل جذري للموبايل) --- */
+.stats-dashboard-row {
+  display: grid;
+  grid-template-columns: 1fr; /* دائمًا عمود واحد في الموبايل */
+  gap: 25px;
+  padding: 0 20px;
+}
+
+/* في الشاشات الكبيرة (الكمبيوتر) نجعلهم بجانب بعض */
+@media (min-width: 992px) {
+  .stats-dashboard-row {
+    grid-template-columns: 1fr 1fr;
+    padding: 0 60px;
+  }
+}
+
+.glass-panel {
+  background: var(--panel-bg);
+  padding: 20px !important;
+  border-radius: 20px;
+  border: 1px solid var(--glass-border);
+}
+
+.table-responsive {
+  width: 100%;
+  overflow-x: auto; /* السماح بالتمرير الأفقي للجدول فقط إذا كبر */
+  -webkit-overflow-scrolling: touch;
+}
+
+table {
+  width: 100%;
+  border-spacing: 0 8px;
+}
+
+td {
+  padding: 12px 10px;
+  font-size: 0.85rem; /* حجم مناسب للموبايل */
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.rank-badge {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: bold;
+}
+
+/* --- 7. تعديلات إضافية خاصة بالشاشات الصغيرة جدًا --- */
+@media (max-width: 480px) {
+  .main-header {
+    padding: 10px 15px;
+  }
+
+  .header-right {
+    display: none; /* إخفاء النص الطويل في اليمين لتوفير مساحة للأزرار */
+  }
+
+  .action-item {
+    width: 36px !important;
+    height: 36px !important;
+  }
+
+  .brand-main {
+    font-size: 0.8rem;
+  }
+
+  .squad-card {
+    padding: 20px !important;
+  }
+}
+
+/* --- 8. تأثيرات --- */
+.tournament-live-glow {
+  animation: mobile-pulse 2s infinite;
+}
+
+@keyframes mobile-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(0, 242, 255, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(0, 242, 255, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(0, 242, 255, 0);
+  }
+}
