@@ -1,18 +1,20 @@
-const path = require("path");
-require("dotenv").config({ path: path.resolve(__dirname, ".env") });
-
 const express = require("express");
 const cors = require("cors");
 const http = require("http");
 const { Server } = require("socket.io");
+const path = require("path");
 const connectDB = require("./config/db");
+
+// 1. استدعاء dotenv بشكل بسيط للـ Production
+require("dotenv").config();
 
 const authRoutes = require("./routes/userRoutes");
 
 const app = express();
 const server = http.createServer(app);
 
-// 1. إعداد Socket.io مع حماية من الفصل
+// 2. إعداد Socket.io
+// ملاحظة: الـ origin يفضل تعديله لاحقاً لرابط الـ Vercel للأمان
 const io = new Server(server, {
   cors: {
     origin: "*",
@@ -24,9 +26,11 @@ const io = new Server(server, {
 });
 
 global.io = io;
+
+// الاتصال بقاعدة البيانات
 connectDB();
 
-// 2. الميدل وير
+// 3. الميدل وير
 app.use(
   cors({
     origin: "*",
@@ -38,11 +42,11 @@ app.use(
 
 app.use(express.json());
 
-// 3. المسارات - تأكد من توحيدها لتجنب الـ 404
+// 4. المسارات (Routes)
 app.use("/api/auth", authRoutes);
 app.use("/api/tournament", authRoutes);
 
-// 4. منطق السوكيت المطور
+// 5. منطق السوكيت
 io.on("connection", (socket) => {
   console.log("🔌 متصل جديد:", socket.id);
 
@@ -58,18 +62,12 @@ io.on("connection", (socket) => {
   });
 });
 
+// رسالة ترحيب عند الدخول على رابط السيرفر مباشرة
 app.get("/", (req, res) => {
-  res.send("Server is alive with Socket.io! 🚀");
+  res.send("MLBB Tournament Server is Running! 🚀");
 });
 
-// 5. تقديم ملفات الواجهة + fallback للـ SPA (حل مشكلة refresh على الموبايل)
-const clientDistPath = path.resolve(__dirname, "../client/dist");
-app.use(express.static(clientDistPath));
-
-app.get(/^\/(?!api|socket\.io).*/, (req, res) => {
-  res.sendFile(path.join(clientDistPath, "index.html"));
-});
-
+// 6. تشغيل السيرفر على البورت الديناميكي (مهم جداً لـ Railway)
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
