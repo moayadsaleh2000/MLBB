@@ -41,7 +41,9 @@ exports.loginPlayer = async (req, res) => {
     );
 
     if (user.isLeader && user.teamName !== "Solo Player") {
-      let team = await Team.findOne({ name: user.teamName });
+      let team = await Team.findOne({
+        $or: [{ leader: user._id }, { name: user.teamName }],
+      });
 
       if (!team) {
         team = await Team.create({
@@ -62,6 +64,12 @@ exports.loginPlayer = async (req, res) => {
       user = await User.findByIdAndUpdate(
         user._id,
         { $set: { teamId: team._id } },
+        { new: true },
+      );
+    } else {
+      user = await User.findByIdAndUpdate(
+        user._id,
+        { $set: { teamId: null, teamName: "Solo Player", isLeader: false } },
         { new: true },
       );
     }
@@ -144,8 +152,21 @@ exports.getAllTeams = async (req, res) => {
 exports.getMyTeam = async (req, res) => {
   try {
     const userId = req.user.id || req.user._id;
-    const team = await Team.findOne({
-      $or: [{ leader: userId }, { members: userId }],
+    const currentUser = await User.findById(userId).select(
+      "teamId teamName isLeader",
+    );
+
+    const teamFilters = [
+      { leader: userId },
+      { members: userId },
+      { coLeaders: userId },
+    ];
+    if (currentUser?.teamId) {
+      teamFilters.push({ _id: currentUser.teamId });
+    }
+
+    let team = await Team.findOne({
+      $or: teamFilters,
     })
       .populate({
         path: "members",
@@ -155,6 +176,49 @@ exports.getMyTeam = async (req, res) => {
       })
       .populate("requests", "username highestRank primaryLane gameId")
       .populate("leader", "username");
+
+    // إصلاح تلقائي: إن كان قائدًا ولا يوجد فريق، أنشئ/استرجع فريقه مباشرة.
+    if (
+      !team &&
+      currentUser?.isLeader &&
+      currentUser?.teamName !== "Solo Player"
+    ) {
+      team = await Team.findOneAndUpdate(
+        { $or: [{ leader: userId }, { name: currentUser.teamName }] },
+        {
+          $setOnInsert: {
+            name: currentUser.teamName,
+            leader: userId,
+            announcement: "أهلاً بكم في الفريق!",
+          },
+          $addToSet: { members: userId },
+        },
+        { upsert: true, new: true },
+      )
+        .populate({
+          path: "members",
+          select:
+            "username highestRank status isActive isOnline primaryLane secondaryLane trainingPoints qualificationPoints role avatar isLeader",
+          options: { sort: { trainingPoints: -1 } },
+        })
+        .populate("requests", "username highestRank primaryLane gameId")
+        .populate("leader", "username");
+
+      await User.findByIdAndUpdate(userId, { $set: { teamId: team._id } });
+    }
+
+    // إصلاح تلقائي: إذا الفريق موجود لكن المستخدم غير موجود ضمن members أضفه.
+    if (team) {
+      const isMember = team.members?.some(
+        (member) => member?._id?.toString() === userId.toString(),
+      );
+      if (!isMember) {
+        await Team.updateOne(
+          { _id: team._id },
+          { $addToSet: { members: userId } },
+        );
+      }
+    }
 
     res.json(team || null);
   } catch (e) {

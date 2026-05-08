@@ -32,7 +32,8 @@ const ProtectedRoute = ({ children }) => {
 
 const PublicRoute = ({ children }) => {
   const token = localStorage.getItem("token");
-  if (token) return <Navigate to="/home" replace />;
+  const manualExit = sessionStorage.getItem("manualExit") === "1";
+  if (token && !manualExit) return <Navigate to="/home" replace />;
   return children;
 };
 

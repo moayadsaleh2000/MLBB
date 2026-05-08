@@ -316,22 +316,9 @@ const Home = () => {
   };
 
   const handleLogout = () => {
-    Swal.fire({
-      title: "هل أنت متأكد؟",
-      text: "سيتم تسجيل خروجك من ساحة المعركة!",
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonColor: "#d33",
-      confirmButtonText: "نعم، خروج",
-      cancelButtonText: "إلغاء",
-      background: "#0a0e14",
-      color: "#fff",
-    }).then((result) => {
-      if (result.isConfirmed) {
-        localStorage.clear();
-        navigate("/");
-      }
-    });
+    // خروج سريع: نرجع لصفحة الدخول بدون حذف التوكن
+    sessionStorage.setItem("manualExit", "1");
+    navigate("/", { replace: true });
   };
 
   if (loading) return <div className="loader">LOADING BATTLEFIELD...</div>;

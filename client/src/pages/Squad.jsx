@@ -19,15 +19,24 @@ import Swal from "sweetalert2";
 import "./Squad.css";
 
 // استخدام رابط الـ API من متغيرات البيئة
-const API_BASE_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
+const normalizeTeam = (team) => {
+  if (!team) return null;
+
+  return {
+    ...team,
+    members: Array.isArray(team.members) ? team.members : [],
+    coLeaders: Array.isArray(team.coLeaders) ? team.coLeaders : [],
+  };
+};
 
 const Squad = () => {
   const navigate = useNavigate();
   const token = localStorage.getItem("token");
 
-  const AUTH_URL = `${API_BASE_URL}/auth`;
-  const TOURNAMENT_URL = `${API_BASE_URL}/tournament`;
+  const AUTH_URL = `${API_BASE_URL}/api/auth`;
+  const TOURNAMENT_URL = `${API_BASE_URL}/api/tournament`;
 
   const [user, setUser] = useState(null);
   const [teamData, setTeamData] = useState(null);
@@ -52,8 +61,9 @@ const Squad = () => {
 
       setUser(resUser.data);
 
-      if (resMyTeam.data) {
-        setTeamData(resMyTeam.data);
+      if (resMyTeam.data?._id) {
+        const normalizedTeam = normalizeTeam(resMyTeam.data);
+        setTeamData(normalizedTeam);
         // جلب آخر إعلان للسكواد
         try {
           const resAnn = await axios.get(
@@ -61,10 +71,13 @@ const Squad = () => {
             { headers },
           );
           setAnnouncement(
-            resAnn.data?.content || resMyTeam.data.announcement || "",
+            resAnn.data?.content ||
+              resAnn.data?.message ||
+              normalizedTeam.announcement ||
+              "",
           );
         } catch (annErr) {
-          setAnnouncement(resMyTeam.data.announcement || "");
+          setAnnouncement(normalizedTeam.announcement || "");
         }
       } else {
         // إذا لم يكن لديه فريق، جلب الفرق المتاحة والطلبات المعلقة
@@ -75,13 +88,14 @@ const Squad = () => {
             .catch(() => ({ data: [] })),
         ]);
 
-        setAllTeams(resAll.data || []);
+        setAllTeams(Array.isArray(resAll.data) ? resAll.data : []);
         setPendingRequests(
           resPending.data
             ?.filter((r) => r.status === "pending")
             .map((r) => r.teamId) || [],
         );
         setTeamData(null);
+        setAnnouncement("");
       }
     } catch (err) {
       console.error("Fetch error:", err);
@@ -307,36 +321,49 @@ const Squad = () => {
         {!teamData ? (
           <div className="explorer-view">
             <div className="teams-grid">
-              {allTeams.map((team) => {
-                const isPending = pendingRequests.includes(team._id);
-                return (
-                  <div key={team._id} className="team-card gold-border">
-                    <div className="team-info">
-                      <h3>{team.name}</h3>
-                      <p>
-                        <FaCrown className="crown" />{" "}
-                        {team.leader?.username || "Commander"}
-                      </p>
-                      <span className="member-count">
-                        {team.members?.length || 0}/10 Members
-                      </span>
+              {allTeams.length === 0 ? (
+                <div className="mission-card gold-border">
+                  <h3>
+                    <FaUsers /> لا يوجد سكوادات متاحة حالياً
+                  </h3>
+                  <p className="mission-text">
+                    جرّب لاحقاً أو اطلب من قائد فريق يرسلك دعوة انضمام.
+                  </p>
+                </div>
+              ) : (
+                allTeams.map((team) => {
+                  const isPending = pendingRequests.includes(team._id);
+                  return (
+                    <div key={team._id} className="team-card gold-border">
+                      <div className="team-info">
+                        <h3>{team.name}</h3>
+                        <p>
+                          <FaCrown className="crown" />{" "}
+                          {team.leader?.username || "Commander"}
+                        </p>
+                        <span className="member-count">
+                          {team.members?.length || 0}/10 Members
+                        </span>
+                      </div>
+                      <button
+                        className={`join-btn ${isPending ? "pending-btn" : ""}`}
+                        onClick={() =>
+                          !isPending && handleJoinRequest(team._id)
+                        }
+                        disabled={isPending}
+                      >
+                        {isPending ? (
+                          <>
+                            <FaHourglassHalf /> PENDING
+                          </>
+                        ) : (
+                          "REQUEST JOIN"
+                        )}
+                      </button>
                     </div>
-                    <button
-                      className={`join-btn ${isPending ? "pending-btn" : ""}`}
-                      onClick={() => !isPending && handleJoinRequest(team._id)}
-                      disabled={isPending}
-                    >
-                      {isPending ? (
-                        <>
-                          <FaHourglassHalf /> PENDING
-                        </>
-                      ) : (
-                        "REQUEST JOIN"
-                      )}
-                    </button>
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
             </div>
           </div>
         ) : (
@@ -373,61 +400,69 @@ const Squad = () => {
               </div>
 
               <div className="roster-list-vertical">
-                {teamData.members?.map((member) => {
-                  const isMemberLeader =
-                    (teamData.leader?._id || teamData.leader) === member._id;
-                  const isMemberCo = teamData.coLeaders?.some(
-                    (id) => (id._id || id) === member._id,
-                  );
-                  const isOnline = member.isActive === true;
+                {teamData.members?.length === 0 ? (
+                  <div className="mission-card gold-border">
+                    <p className="mission-text">
+                      لا يوجد أعضاء ظاهرين حالياً في هذا السكواد.
+                    </p>
+                  </div>
+                ) : (
+                  teamData.members?.map((member) => {
+                    const isMemberLeader =
+                      (teamData.leader?._id || teamData.leader) === member._id;
+                    const isMemberCo = teamData.coLeaders?.some(
+                      (id) => (id._id || id) === member._id,
+                    );
+                    const isOnline = member.isActive === true;
 
-                  return (
-                    <div
-                      key={member._id}
-                      className={`member-row-gold ${isOnline ? "row-active" : ""}`}
-                    >
-                      <div className="member-left">
-                        <div className="member-avatar-wrapper">
-                          <img
-                            src={`https://ui-avatars.com/api/?name=${member.username}&background=d4af37&color=000`}
-                            alt="avatar"
-                          />
-                          <div
-                            className={`status-dot ${isOnline ? "on" : "off"}`}
-                          ></div>
+                    return (
+                      <div
+                        key={member._id}
+                        className={`member-row-gold ${isOnline ? "row-active" : ""}`}
+                      >
+                        <div className="member-left">
+                          <div className="member-avatar-wrapper">
+                            <img
+                              src={`https://ui-avatars.com/api/?name=${member.username}&background=d4af37&color=000`}
+                              alt="avatar"
+                            />
+                            <div
+                              className={`status-dot ${isOnline ? "on" : "off"}`}
+                            ></div>
+                          </div>
+                          <div className="member-info-text">
+                            <span className="m-name-bold">
+                              {member.username}{" "}
+                              {isMemberLeader && (
+                                <FaCrown className="mini-crown" />
+                              )}{" "}
+                              {isMemberCo && (
+                                <FaShieldAlt className="mini-shield" />
+                              )}
+                            </span>
+                            <span className="m-lane-sub">
+                              {isMemberLeader
+                                ? "Squad Leader"
+                                : isMemberCo
+                                  ? "Co-Leader"
+                                  : "Member"}
+                            </span>
+                          </div>
                         </div>
-                        <div className="member-info-text">
-                          <span className="m-name-bold">
-                            {member.username}{" "}
-                            {isMemberLeader && (
-                              <FaCrown className="mini-crown" />
-                            )}{" "}
-                            {isMemberCo && (
-                              <FaShieldAlt className="mini-shield" />
-                            )}
-                          </span>
-                          <span className="m-lane-sub">
-                            {isMemberLeader
-                              ? "Squad Leader"
-                              : isMemberCo
-                                ? "Co-Leader"
-                                : "Member"}
-                          </span>
+                        <div className="member-right">
+                          {isOwner && !isMemberLeader && (
+                            <button
+                              className="options-btn-gold"
+                              onClick={() => handleMemberAction(member)}
+                            >
+                              <FaEllipsisV />
+                            </button>
+                          )}
                         </div>
                       </div>
-                      <div className="member-right">
-                        {isOwner && !isMemberLeader && (
-                          <button
-                            className="options-btn-gold"
-                            onClick={() => handleMemberAction(member)}
-                          >
-                            <FaEllipsisV />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                )}
               </div>
             </div>
 

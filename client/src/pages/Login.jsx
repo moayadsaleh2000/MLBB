@@ -89,6 +89,7 @@ const Login = () => {
 
       localStorage.setItem("token", res.data.token);
       localStorage.setItem("user", JSON.stringify(res.data.user));
+      sessionStorage.removeItem("manualExit");
 
       Swal.fire({
         title: "تم التسجيل بنجاح!",
