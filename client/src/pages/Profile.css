@@ -201,6 +201,19 @@ select:focus {
   border-color: #d4af37;
 }
 
+.username-locked {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.username-cooldown-hint {
+  margin: 0;
+  font-size: 0.72rem;
+  color: #ff9f43;
+  line-height: 1.4;
+}
+
 /* Footer Actions */
 .action-footer {
   margin-top: 30px;

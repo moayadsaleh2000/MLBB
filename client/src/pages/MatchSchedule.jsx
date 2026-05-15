@@ -10,10 +10,10 @@ import {
   FaTable,
   FaUndo,
   FaBolt,
+  FaClock,
 } from "react-icons/fa";
 import "./MatchSchedule.css";
 
-// استخدام الرابط الديناميكي: سيقرأ من ملف .env عند الرفع أو يستخدم الـ localhost للتطوير
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 const MatchSchedule = () => {
@@ -29,13 +29,13 @@ const MatchSchedule = () => {
 
   const isRefreshing = useRef(false);
 
-  // تنسيق اسم الفريق (إزالة الزوائد)
-  const formatTeamName = (name) => {
-    if (!name) return "TBD";
+  // تنسيق اسم الفريق ليظهر بشكل أنيق
+  const formatTeamName = useCallback((name) => {
+    if (!name) return "بانتظار المنافس...";
     return name.split(" - ")[0];
-  };
+  }, []);
 
-  // التحقق من وجود تعادل في نظام الدوري
+  // فحص شروط التعادل في نظام الدوري
   const checkTieCondition = useCallback((data) => {
     if (data.systemType === "league" && data.status === "active") {
       const allDone = data.leagueMatches?.every((m) => m.winner);
@@ -43,17 +43,20 @@ const MatchSchedule = () => {
     }
   }, []);
 
-  // تحديث بيانات البطولة من السيرفر
   const refreshTournament = useCallback(
     async (showLoading = false) => {
       const tId = tournament?._id || state?._id;
-      if (!tId || isRefreshing.current) return;
+      if (isRefreshing.current || !token) return;
 
       try {
         if (showLoading) setLoading(true);
         isRefreshing.current = true;
 
-        const res = await axios.get(`${API_BASE_URL}/api/tournament/${tId}`, {
+        const url = tId
+          ? `${API_BASE_URL}/api/tournament/${tId}`
+          : `${API_BASE_URL}/api/tournament/current`;
+
+        const res = await axios.get(url, {
           headers: { Authorization: `Bearer ${token}` },
         });
 
@@ -62,7 +65,7 @@ const MatchSchedule = () => {
           checkTieCondition(res.data);
         }
       } catch (err) {
-        console.error("❌ Fetch Error:", err);
+        if (err.response?.status === 404) setTournament(null);
       } finally {
         isRefreshing.current = false;
         if (showLoading) setLoading(false);
@@ -74,186 +77,140 @@ const MatchSchedule = () => {
   useEffect(() => {
     if (!token) return navigate("/login");
 
-    const initAuthAndData = async () => {
+    const init = async () => {
       try {
         setLoading(true);
-        // جلب بيانات الحساب والسكواد للتأكد من الصلاحيات
+        // جلب الملف الشخصي والسكواد للتأكد من الصلاحيات
         const [profileRes, teamDataRes] = await Promise.all([
-          axios.get(`${API_BASE_URL}/api/auth/profile`, {
-            // تم تصحيح المسار ليتوافق مع AllTeams
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-          axios.get(`${API_BASE_URL}/api/auth/my-team`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
+          axios
+            .get(`${API_BASE_URL}/api/auth/profile`, {
+              headers: { Authorization: `Bearer ${token}` },
+            })
+            .catch(() => null),
+          axios
+            .get(`${API_BASE_URL}/api/auth/my-team`, {
+              headers: { Authorization: `Bearer ${token}` },
+            })
+            .catch(() => null),
         ]);
 
-        const user = profileRes.data;
-        const squad = teamDataRes.data;
+        if (profileRes?.data) {
+          const user = profileRes.data;
+          const squad = teamDataRes?.data;
+          const myId = String(user._id || user.id);
 
-        const myId = String(user._id || user.id || "");
-        const role = String(user.role || "").toLowerCase();
+          const leaderId = squad?.leader?._id
+            ? String(squad.leader._id)
+            : String(squad?.leader || "");
+          const coLeaders =
+            squad?.coLeaders?.map((cl) => String(cl._id || cl)) || [];
 
-        const leaderIdInSquad = squad?.leader?._id
-          ? String(squad.leader._id)
-          : String(squad?.leader || "");
-
-        const coLeaderIds =
-          squad?.coLeaders?.map((cl) =>
-            typeof cl === "object" ? String(cl._id) : String(cl),
-          ) || [];
-
-        // السماح بالتحكم للقائد والمساعدين فقط
-        const hasAccess =
-          role === "leader" ||
-          role === "co-leader" ||
-          user.isLeader === true ||
-          myId === leaderIdInSquad ||
-          coLeaderIds.includes(myId);
-
-        setIsAuthorized(hasAccess);
+          setIsAuthorized(
+            myId === leaderId ||
+              coLeaders.includes(myId) ||
+              user.role === "admin",
+          );
+        }
         await refreshTournament();
-      } catch (e) {
-        console.error("❌ Auth Sync Error:", e);
       } finally {
         setLoading(false);
       }
     };
 
-    initAuthAndData();
-    // تحديث تلقائي كل 10 ثوانٍ لمتابعة النتائج الحية
+    init();
     const interval = setInterval(() => refreshTournament(false), 10000);
     return () => clearInterval(interval);
-  }, [token, refreshTournament, navigate]);
+  }, [token, navigate, refreshTournament]);
 
-  // منطق كسر التعادل (Tie Breaker)
-  const handleGenerateTieBreaker = async () => {
-    if (!isAuthorized || loading) return;
-
-    const result = await Swal.fire({
-      title: "إنشاء مباراة فاصلة؟",
-      text: "سيتم توليد مواجهة نهائية لكسر التعادل بين المتصدرين",
-      icon: "info",
-      showCancelButton: true,
-      confirmButtonText: "انطلق",
-      cancelButtonText: "إلغاء",
-      background: "#0a0a0c",
-      color: "#fff",
-      confirmButtonColor: "#d4af37",
-    });
-
-    if (result.isConfirmed) {
-      setLoading(true);
-      try {
-        const res = await axios.post(
-          `${API_BASE_URL}/api/tournament/generate-tiebreaker`,
-          { tournamentId: tournament._id },
-          { headers: { Authorization: `Bearer ${token}` } },
-        );
-        setTournament(res.data);
-        setShowTieBreakerBtn(false);
-        Swal.fire("تم!", "تم إنشاء المباراة الفاصلة بنجاح", "success");
-      } catch (err) {
-        Swal.fire(
-          "خطأ",
-          "فشل إنشاء المباراة، تأكد من وجود تعادل فعلي",
-          "error",
-        );
-      } finally {
-        setLoading(false);
-      }
-    }
-  };
-
-  // تسجيل فوز فريق
   const handleSetWinner = async (team, mIdx, rIdx = null) => {
-    if (!isAuthorized) {
-      return Swal.fire({
-        title: "🛡️ تنبيه القائد",
-        text: "يجب أن تكون القائد أو مساعد القائد لتعديل النتائج",
-        icon: "warning",
-        background: "#0a0a0c",
-        color: "#fff",
-      });
-    }
-
-    if (loading || tournament.status === "finished") return;
+    if (!isAuthorized) return; // منع التفاعل لغير المخولين
+    if (loading || tournament.status === "finished" || !team) return;
 
     const result = await Swal.fire({
       title: "تأكيد النتيجة",
       text: `هل أنت متأكد من فوز فريق ${formatTeamName(team.name)}؟`,
       icon: "question",
       showCancelButton: true,
-      confirmButtonText: "نعم، مؤكد",
-      cancelButtonText: "تراجع",
+      confirmButtonText: "نعم، فائز",
+      confirmButtonColor: "#28a745",
       background: "#0a0a0c",
       color: "#fff",
-      confirmButtonColor: "#28a745",
     });
 
     if (result.isConfirmed) {
-      setLoading(true);
       try {
+        setLoading(true);
         const { data } = await axios.post(
           `${API_BASE_URL}/api/tournament/report-win`,
           {
             tournamentId: tournament._id,
-            winnerTeamId: String(team._id || team.id),
+            winnerTeamId: team._id,
             matchIdx: mIdx,
             roundIdx: rIdx,
           },
           { headers: { Authorization: `Bearer ${token}` } },
         );
-
         setTournament(data);
         checkTieCondition(data);
-        Swal.fire("تم التسجيل", "تم تحديث حالة المواجهة بنجاح", "success");
+        Swal.fire({
+          icon: "success",
+          title: "تم التسجيل",
+          timer: 1500,
+          showConfirmButton: false,
+        });
       } catch (err) {
-        Swal.fire("خطأ", "فشل في حفظ النتيجة على السيرفر", "error");
+        Swal.fire("خطأ", "حدثت مشكلة أثناء حفظ النتيجة", "error");
       } finally {
         setLoading(false);
       }
     }
   };
 
-  // التراجع عن آخر حركة
   const handleUndo = async () => {
     if (!isAuthorized || loading) return;
-
     const result = await Swal.fire({
-      title: "تراجع عن النتيجة؟",
-      text: "سيتم حذف آخر نتيجة مسجلة وإعادة فتح المباراة",
+      title: "تراجع؟",
+      text: "سيتم حذف آخر نتيجة مسجلة في البطولة",
       icon: "warning",
       showCancelButton: true,
-      confirmButtonText: "تراجع الآن",
-      cancelButtonText: "إلغاء",
+      confirmButtonText: "تراجع",
       background: "#0a0a0c",
       color: "#fff",
     });
 
     if (result.isConfirmed) {
-      setLoading(true);
       try {
+        setLoading(true);
         const res = await axios.post(
           `${API_BASE_URL}/api/tournament/undo-match`,
           { tournamentId: tournament._id },
           { headers: { Authorization: `Bearer ${token}` } },
         );
         setTournament(res.data);
-        Swal.fire("تم", "تم إلغاء النتيجة الأخيرة بنجاح", "success");
-      } catch (err) {
-        Swal.fire("خطأ", "لا يوجد جولات مسجلة للتراجع عنها", "error");
+      } catch {
+        Swal.fire("خطأ", "لا يوجد جولات للتراجع عنها", "error");
       } finally {
         setLoading(false);
       }
     }
   };
 
-  if (!tournament)
+  if (!tournament && loading)
     return (
       <div className="dark-loader">
         <div className="spinner"></div>
-        <p>جاري تحميل الساحة...</p>
+      </div>
+    );
+  if (!tournament)
+    return (
+      <div className="dark-loader">
+        <p>لا توجد بطولة نشطة حالياً</p>
+        <button
+          onClick={() => navigate("/matchmaking")}
+          className="home-neon-btn"
+        >
+          عودة
+        </button>
       </div>
     );
 
@@ -270,98 +227,72 @@ const MatchSchedule = () => {
         >
           <FaArrowLeft />
         </button>
-
         <div className="tournament-brand">
           <FaKhanda className="brand-icon" />
           <span>{tournament.systemType?.toUpperCase()} ARENA</span>
           {isAuthorized && (
-            <span className="admin-status">🛡️ LEADER ACCESS</span>
+            <span className="admin-status pulse-gold">🛡️ LEADER MODE</span>
           )}
         </div>
-
         <div className="nav-controls">
           {isAuthorized && showTieBreakerBtn && (
-            <button
-              className="btn-tie-breaker pulse-gold"
-              onClick={handleGenerateTieBreaker}
-            >
+            <button className="btn-tie-breaker pulse-gold" onClick={() => {}}>
               <FaBolt /> TIE BREAKER
             </button>
           )}
-
-          {isAuthorized &&
-            (tournament.rounds?.length > 0 ||
-              tournament.leagueMatches?.length > 0) && (
-              <button
-                className="btn-undo"
-                onClick={handleUndo}
-                disabled={loading}
-              >
-                <FaUndo /> {loading ? "..." : "UNDO"}
-              </button>
-            )}
+          {isAuthorized && (
+            <button
+              className="btn-undo"
+              onClick={handleUndo}
+              disabled={loading}
+            >
+              <FaUndo />
+            </button>
+          )}
         </div>
       </nav>
 
       <div className="battle-stage animated-fade">
         <div className="bracket-container">
-          {isLeague ? (
-            <div className="league-container">
-              <h2 className="league-title">
-                <FaTable /> LEAGUE MATCHES
-              </h2>
-              <div className="matches-grid">
-                {tournament.leagueMatches?.map((match, idx) => (
-                  <MatchCard
-                    key={idx}
-                    match={match}
-                    idx={idx}
-                    roundIdx={null}
-                    isAuthorized={isAuthorized}
-                    handleSetWinner={handleSetWinner}
-                    formatTeamName={formatTeamName}
-                    loading={loading}
-                  />
-                ))}
-              </div>
+          {!isLeague && (
+            <div className="round-tabs">
+              {tournament.rounds?.map((_, i) => (
+                <button
+                  key={i}
+                  className={activeRound === i ? "tab active" : "tab"}
+                  onClick={() => setActiveRound(i)}
+                >
+                  ROUND {i + 1}
+                </button>
+              ))}
             </div>
-          ) : (
-            <>
-              <div className="round-tabs">
-                {tournament.rounds?.map((_, i) => (
-                  <button
-                    key={i}
-                    className={activeRound === i ? "tab active" : "tab"}
-                    onClick={() => setActiveRound(i)}
-                  >
-                    ROUND {i + 1}
-                  </button>
-                ))}
-              </div>
-              <div className="matches-grid">
-                {tournament.rounds[activeRound]?.matches?.map((match, idx) => (
-                  <MatchCard
-                    key={idx}
-                    match={match}
-                    idx={idx}
-                    roundIdx={activeRound}
-                    isAuthorized={isAuthorized}
-                    handleSetWinner={handleSetWinner}
-                    formatTeamName={formatTeamName}
-                    loading={loading}
-                  />
-                ))}
-              </div>
-            </>
           )}
+
+          <div className="matches-grid">
+            {(isLeague
+              ? tournament.leagueMatches
+              : tournament.rounds[activeRound]?.matches
+            )?.map((match, idx) => (
+              <MatchCard
+                key={idx}
+                match={match}
+                idx={idx}
+                roundIdx={isLeague ? null : activeRound}
+                isAuthorized={isAuthorized}
+                handleSetWinner={handleSetWinner}
+                formatTeamName={formatTeamName}
+                loading={loading}
+              />
+            ))}
+          </div>
         </div>
       </div>
 
       {tournament.status === "finished" && (
-        <div className="victory-overlay">
+        <div className="victory-overlay animated-fade">
           <div className="victory-card">
             <FaTrophy className="crown-icon" />
-            <p>SUPREME CHAMPION</p>
+            <p>CHAMPION</p>
             <h1 className="winner-name">
               {formatTeamName(tournament.finalWinner?.name)}
             </h1>
@@ -369,7 +300,7 @@ const MatchSchedule = () => {
               className="exit-btn"
               onClick={() => navigate("/matchmaking")}
             >
-              BACK TO TEAMS
+              FINISH
             </button>
           </div>
         </div>
@@ -378,7 +309,7 @@ const MatchSchedule = () => {
   );
 };
 
-// مكون بطاقة المواجهة (Match Card)
+// مكون المباراة الفرعي
 const MatchCard = ({
   match,
   idx,
@@ -388,56 +319,26 @@ const MatchCard = ({
   formatTeamName,
   loading,
 }) => {
-  const winnerId = match.winner
-    ? String(match.winner._id || match.winner)
-    : null;
-  const teamAId = match.teamA
-    ? String(match.teamA._id || match.teamA.id)
-    : null;
-  const teamBId = match.teamB
-    ? String(match.teamB._id || match.teamB.id)
-    : null;
+  const winnerId = match.winner?._id || match.winner;
+  const renderTeam = (team, type) => {
+    const isThisWinner = winnerId && (team?._id || team?.id) === winnerId;
+    return (
+      <div
+        className={`team-slot ${isAuthorized && !winnerId && team ? "clickable" : "read-only"} ${isThisWinner ? "winner" : ""}`}
+        onClick={() => team && handleSetWinner(team, idx, roundIdx)}
+      >
+        <span className="t-name">{formatTeamName(team?.name)}</span>
+        {isThisWinner && <FaCheckCircle className="check-icon" />}
+      </div>
+    );
+  };
 
   return (
     <div className="match-card-wrapper">
       <div className="match-box-ui">
-        {/* فريق A */}
-        <div
-          className={`team-slot ${
-            isAuthorized && !winnerId && !loading ? "clickable" : "read-only"
-          } ${winnerId && teamAId === winnerId ? "winner" : ""}`}
-          onClick={() =>
-            !winnerId &&
-            !loading &&
-            match.teamA &&
-            handleSetWinner(match.teamA, idx, roundIdx)
-          }
-        >
-          <span className="t-name">{formatTeamName(match.teamA?.name)}</span>
-          {winnerId && teamAId === winnerId && (
-            <FaCheckCircle className="check-icon" />
-          )}
-        </div>
-
-        <div className="vs-divider">VS</div>
-
-        {/* فريق B */}
-        <div
-          className={`team-slot ${
-            isAuthorized && !winnerId && !loading ? "clickable" : "read-only"
-          } ${winnerId && teamBId === winnerId ? "winner" : ""}`}
-          onClick={() =>
-            !winnerId &&
-            !loading &&
-            match.teamB &&
-            handleSetWinner(match.teamB, idx, roundIdx)
-          }
-        >
-          <span className="t-name">{formatTeamName(match.teamB?.name)}</span>
-          {winnerId && teamBId === winnerId && (
-            <FaCheckCircle className="check-icon" />
-          )}
-        </div>
+        {renderTeam(match.teamA, "A")}
+        <div className="vs-divider">{winnerId ? "RESULT" : "VS"}</div>
+        {renderTeam(match.teamB, "B")}
       </div>
     </div>
   );

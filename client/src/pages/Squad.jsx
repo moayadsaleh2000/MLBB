@@ -13,9 +13,12 @@ import {
   FaTrashAlt,
   FaHourglassHalf,
   FaEdit,
+  FaDumbbell,
+  FaTrophy,
 } from "react-icons/fa";
 import axios from "axios";
 import Swal from "sweetalert2";
+import { io } from "socket.io-client";
 import "./Squad.css";
 
 // استخدام رابط الـ API من متغيرات البيئة
@@ -112,6 +115,19 @@ const Squad = () => {
     }
     fetchData();
   }, [token, navigate, fetchData]);
+
+  useEffect(() => {
+    if (!token) return undefined;
+
+    const socket = io(API_BASE_URL, { auth: { token } });
+    socket.on("tournamentUpdated", () => {
+      fetchData();
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [token, fetchData]);
 
   // تحديث الإعلان (أوامر القائد)
   const handleUpdateAnnouncement = async () => {
@@ -275,7 +291,18 @@ const Squad = () => {
 
   if (loading) return <div className="loader-gold">⚔️ LOADING ARENA...</div>;
 
-  const isOwner = user?._id === (teamData?.leader?._id || teamData?.leader);
+  const userId = user?._id || user?.id;
+  const isOwner = userId === (teamData?.leader?._id || teamData?.leader);
+  const isCoLeader = teamData?.coLeaders?.some(
+    (cl) => (cl._id || cl) === userId,
+  );
+  const canManageTeams = isOwner || isCoLeader;
+  const hasBalancedTeams = (teamData?.eliteTeams?.length || 0) > 0;
+  const activeTournamentId = teamData?.activeTournamentId;
+  const activeTournamentMode = teamData?.activeTournamentMode;
+  const isQualificationActive =
+    activeTournamentMode === "qualification" ||
+    activeTournamentMode === "qualifying";
   const totalMembers = teamData?.members?.length || 0;
   const activeCount =
     teamData?.members?.filter((m) => m.isActive === true).length || 0;
@@ -466,7 +493,7 @@ const Squad = () => {
               </div>
             </div>
 
-            {isOwner && (
+            {canManageTeams && (
               <div className="battle-footer">
                 <button
                   className={`mega-battle-btn ${activeCount >= 10 ? "active" : "disabled"}`}
@@ -478,6 +505,49 @@ const Squad = () => {
                     ? "GENERATE BATTLE TEAMS"
                     : `NEED ${10 - activeCount} MORE READY`}
                 </button>
+              </div>
+            )}
+
+            {!canManageTeams && (
+              <div className="battle-footer member-battle-footer">
+                <button
+                  className={`mega-battle-btn view-teams-btn ${hasBalancedTeams ? "active" : "disabled"}`}
+                  disabled={!hasBalancedTeams}
+                  onClick={() => hasBalancedTeams && navigate("/matchmaking")}
+                  title={
+                    hasBalancedTeams
+                      ? "عرض فرق المعركة"
+                      : "بانتظار توليد الفرق من القائد أو المساعد"
+                  }
+                >
+                  <FaUsers />{" "}
+                  {hasBalancedTeams
+                    ? "عرض فرق المعركة"
+                    : "بانتظار توليد الفرق من القائد"}
+                </button>
+
+                {activeTournamentId && (
+                  <button
+                    className={`mega-battle-btn ${
+                      isQualificationActive
+                        ? "qualify-active"
+                        : "training-active"
+                    }`}
+                    onClick={() =>
+                      navigate(`/match-schedule/${activeTournamentId}`)
+                    }
+                  >
+                    {isQualificationActive ? (
+                      <>
+                        <FaTrophy /> الانتقال للتأهيل
+                      </>
+                    ) : (
+                      <>
+                        <FaDumbbell /> الانتقال للتدريب
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
             )}
           </div>

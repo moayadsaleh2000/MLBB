@@ -9,6 +9,10 @@ const UserSchema = new mongoose.Schema(
       trim: true,
       index: true,
     },
+    lastUsernameChangeAt: {
+      type: Date,
+      default: null,
+    },
     gameId: {
       type: String,
       default: "",

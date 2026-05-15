@@ -15,6 +15,23 @@ import "./Profile.css";
 
 // 1. تعريف رابط الـ API بشكل ديناميكي
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const USERNAME_CHANGE_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000;
+
+const canChangeUsername = (u) => {
+  if (!u?.lastUsernameChangeAt) return true;
+  return (
+    Date.now() - new Date(u.lastUsernameChangeAt).getTime() >=
+    USERNAME_CHANGE_COOLDOWN_MS
+  );
+};
+
+const daysUntilUsernameChange = (u) => {
+  if (!u?.lastUsernameChangeAt || canChangeUsername(u)) return 0;
+  const remaining =
+    USERNAME_CHANGE_COOLDOWN_MS -
+    (Date.now() - new Date(u.lastUsernameChangeAt).getTime());
+  return Math.ceil(remaining / (24 * 60 * 60 * 1000));
+};
 
 const Profile = () => {
   const navigate = useNavigate();
@@ -32,6 +49,7 @@ const Profile = () => {
   const [currentTeamName, setCurrentTeamName] = useState("SOLO");
 
   const [formData, setFormData] = useState({
+    username: "",
     gameId: "",
     highestRank: "Epic",
     isActive: false,
@@ -68,6 +86,7 @@ const Profile = () => {
         setCurrentTeamName(teamRes.data ? teamRes.data.name : "SOLO");
 
         setFormData({
+          username: profileRes.data.username || "",
           gameId: profileRes.data.gameId || "",
           highestRank: profileRes.data.highestRank || "Epic",
           isActive: profileRes.data.isActive || false,
@@ -100,7 +119,12 @@ const Profile = () => {
         color: "#ffd700",
       });
 
-      const res = await axios.put(PROFILE_URL, formData, {
+      const payload = { ...formData };
+      if (!canChangeUsername(user)) {
+        delete payload.username;
+      }
+
+      const res = await axios.put(PROFILE_URL, payload, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -131,6 +155,9 @@ const Profile = () => {
 
   if (loading)
     return <div className="loader-gold">⚔️ ACCESSING ARCHIVES...</div>;
+
+  const usernameEditable = canChangeUsername(user);
+  const usernameCooldownDays = daysUntilUsernameChange(user);
 
   return (
     <div className="profile-wrapper gold-theme">
@@ -172,6 +199,32 @@ const Profile = () => {
         </div>
 
         <div className="stats-grid">
+          <div className="stat-box gold-glow">
+            <label>
+              <FaUserCircle /> WARRIOR NAME
+            </label>
+            {!isEditing ? (
+              <span className="val-gold">{user?.username || "—"}</span>
+            ) : usernameEditable ? (
+              <input
+                type="text"
+                value={formData.username}
+                onChange={(e) =>
+                  setFormData({ ...formData, username: e.target.value })
+                }
+                placeholder="Enter your name"
+                maxLength={32}
+              />
+            ) : (
+              <div className="username-locked">
+                <span className="val-gold">{user?.username}</span>
+                <p className="username-cooldown-hint">
+                  يمكنك تغيير الاسم مرة كل شهر. متبقي {usernameCooldownDays} يوم
+                </p>
+              </div>
+            )}
+          </div>
+
           <div className="stat-box gold-glow">
             <label>
               <FaGamepad /> GAME ID

@@ -7,22 +7,28 @@ const Team = require("../models/Team");
  */
 exports.getCurrentTournament = async (req, res) => {
   try {
-    const currentUserId = req.user._id || req.user.id;
-    const squadId = req.user.teamId || currentUserId;
+    const userId = req.user._id || req.user.id;
 
+    // البحث عن السكواد اللي المستخدم عضو فيه أو قائده
+    const userSquad = await Team.findOne({
+      $or: [{ leader: userId }, { members: userId }, { coLeaders: userId }],
+    });
+
+    // البحث عن البطولة: إما بطولة السكواد أو بطولة تأهيلية عامة
     const tournament = await Tournament.findOne({
+      status: "active",
       $or: [
-        { squadId, status: "active" },
-        { mode: "qualifying", status: "active" },
+        { squadId: userSquad?._id }, // بطولة السكواد (التدريب)
+        { mode: "qualifying" }, // بطولة التأهيل (العامة)
       ],
     })
       .populate("teams")
       .populate("rounds.matches.teamA rounds.matches.teamB")
       .populate("leagueMatches.teamA leagueMatches.teamB");
 
-    if (!tournament) {
-      return res.status(404).json({ message: "لا توجد بطولة نشطة حالياً" });
-    }
+    if (!tournament)
+      return res.status(404).json({ message: "لا توجد بطولة نشطة" });
+
     res.json(tournament);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -56,7 +62,15 @@ exports.createTournament = async (req, res) => {
     if (!req.user) return res.status(401).json({ error: "غير مصرح لك" });
 
     const currentUserId = req.user._id || req.user.id;
-    const squadId = req.user.teamId || currentUserId;
+    const userSquad = await Team.findOne({
+      $or: [
+        { leader: currentUserId },
+        { members: currentUserId },
+        { coLeaders: currentUserId },
+      ],
+      isTemporary: false,
+    });
+    const squadId = userSquad?._id || req.user.teamId || null;
 
     const finalTeamIds = [];
     for (let teamData of incomingTeams) {
@@ -115,6 +129,24 @@ exports.createTournament = async (req, res) => {
     });
 
     await newTournament.save();
+
+    if (squadId) {
+      await Tournament.updateMany(
+        {
+          squadId,
+          status: "active",
+          _id: { $ne: newTournament._id },
+        },
+        { $set: { status: "finished" } },
+      );
+      await Team.findByIdAndUpdate(squadId, {
+        $set: {
+          activeTournamentId: newTournament._id,
+          activeTournamentMode: mode,
+        },
+      });
+    }
+
     const populated = await Tournament.findById(newTournament._id)
       .populate("teams")
       .populate("rounds.matches.teamA rounds.matches.teamB")
@@ -397,6 +429,12 @@ async function finishTournamentLogic(tournament) {
     }
 
     await tournament.save();
+
+    if (tournament.squadId) {
+      await Team.findByIdAndUpdate(tournament.squadId, {
+        $unset: { activeTournamentId: 1, activeTournamentMode: 1 },
+      });
+    }
 
     if (global.io) {
       console.log(

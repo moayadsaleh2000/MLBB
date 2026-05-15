@@ -8,6 +8,7 @@
   --error-red: #ff4444;
   --text-gray: #a0aab8;
   --panel-bg: rgba(15, 20, 28, 0.9);
+  --success-green: #44ff44;
 }
 
 /* --- 2. التنسيق العام --- */
@@ -17,15 +18,15 @@
   color: #fff;
   font-family: "Orbitron", sans-serif;
   padding-bottom: 40px;
-  overflow-x: hidden; /* لمنع التمرير الأفقي في الموبايل */
+  overflow-x: hidden; /* منع التمرير الأفقي المزعج في الموبايل */
 }
 
-/* --- 3. الهيدر (تحسين الموبايل) --- */
+/* --- 3. الهيدر (Responsive Header) --- */
 .main-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 20px; /* تقليل الحواف للموبايل */
+  padding: 12px 15px;
   background: rgba(0, 0, 0, 0.9);
   border-bottom: 2px solid var(--primary-gold);
   position: sticky;
@@ -36,29 +37,18 @@
 
 .header-left {
   display: flex;
-  gap: 12px; /* تقليل المسافات */
-  align-items: center;
-}
-
-.mlbb-logo-container {
-  display: flex;
-  align-items: center;
   gap: 10px;
+  align-items: center;
 }
 
 .mlbb-icon-main {
-  font-size: 1.8rem !important;
+  font-size: 1.6rem !important;
   color: var(--primary-gold);
-}
-
-.logo-text-box {
-  display: flex;
-  flex-direction: column;
 }
 
 .brand-main {
   font-weight: 900;
-  font-size: 0.9rem; /* تصغير الخط */
+  font-size: 0.85rem;
   letter-spacing: 1px;
 }
 
@@ -67,10 +57,10 @@
   color: var(--secondary-cyan);
 }
 
-/* --- 4. أيقونات التفاعل (أزرار مناسبة للمس) --- */
+/* --- 4. أيقونات التفاعل (Touch-Friendly) --- */
 .action-item {
-  width: 40px !important;
-  height: 40px !important;
+  width: 38px !important;
+  height: 38px !important;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -78,21 +68,15 @@
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--glass-border);
   color: var(--text-gray);
-  cursor: pointer;
   position: relative;
-}
-
-.action-item svg {
-  width: 18px !important;
-  height: 18px !important;
 }
 
 .red-notif-dot {
   position: absolute;
   top: 2px;
   right: 2px;
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   background: var(--error-red);
   border-radius: 50%;
   box-shadow: 0 0 5px var(--error-red);
@@ -100,21 +84,21 @@
 
 /* --- 5. كروت السكواد (Responsive Grid) --- */
 .squads-container {
-  padding: 30px 20px;
+  padding: 20px 15px;
 }
 
 .section-label {
-  font-size: 1.2rem;
-  margin-bottom: 25px;
+  font-size: 1.1rem;
+  margin-bottom: 20px;
   color: var(--primary-gold);
   text-align: center;
+  text-transform: uppercase;
 }
 
 .squads-grid-layout {
   display: grid;
-  /* الموبايل: كرت واحد | التابلت: 2 | الكمبيوتر: 3 أو أكثر */
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 20px;
+  gap: 15px;
   max-width: 1200px;
   margin: 0 auto;
 }
@@ -123,126 +107,149 @@
   background: var(--card-bg);
   border: 1px solid var(--glass-border);
   border-radius: 15px;
-  padding: 25px !important;
+  padding: 20px !important;
   text-align: center;
-  transition: transform 0.3s ease;
+  transition: 0.3s;
 }
 
 .active-squad-glow {
   border-color: var(--primary-gold);
-  box-shadow: 0 0 15px rgba(255, 204, 0, 0.2);
-}
-
-.member-count-badge {
-  background: rgba(0, 242, 255, 0.1);
-  padding: 5px 12px;
-  border-radius: 15px;
-  font-size: 0.75rem;
-  margin: 10px 0 20px;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
+  box-shadow: 0 0 15px rgba(255, 204, 0, 0.15);
 }
 
 .squad-action-btn {
   width: 100%;
-  padding: 12px;
+  padding: 10px;
   background: transparent;
   border: 1px solid var(--secondary-cyan);
   color: var(--secondary-cyan);
   border-radius: 8px;
   font-weight: bold;
-  text-transform: uppercase;
+  font-size: 0.8rem;
 }
 
-.gold-btn {
-  border-color: var(--primary-gold);
-  color: var(--primary-gold);
-}
-
-/* --- 6. جداول الإحصائيات (تعديل جذري للموبايل) --- */
+/* --- 6. جداول الإحصائيات (تحسين الموبايل) --- */
 .stats-dashboard-row {
   display: grid;
-  grid-template-columns: 1fr; /* دائمًا عمود واحد في الموبايل */
-  gap: 25px;
-  padding: 0 20px;
+  grid-template-columns: 1fr;
+  gap: 20px;
+  padding: 0 15px;
 }
 
-/* في الشاشات الكبيرة (الكمبيوتر) نجعلهم بجانب بعض */
 @media (min-width: 992px) {
   .stats-dashboard-row {
     grid-template-columns: 1fr 1fr;
-    padding: 0 60px;
+    padding: 0 40px;
   }
 }
 
 .glass-panel {
   background: var(--panel-bg);
-  padding: 20px !important;
-  border-radius: 20px;
+  padding: 15px !important;
+  border-radius: 15px;
   border: 1px solid var(--glass-border);
 }
 
 .table-responsive {
   width: 100%;
-  overflow-x: auto; /* السماح بالتمرير الأفقي للجدول فقط إذا كبر */
+  overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
 
 table {
   width: 100%;
-  border-spacing: 0 8px;
+  border-spacing: 0 5px;
 }
 
 td {
-  padding: 12px 10px;
-  font-size: 0.85rem; /* حجم مناسب للموبايل */
-  background: rgba(255, 255, 255, 0.02);
+  padding: 10px;
+  font-size: 0.75rem; /* تصغير الخط قليلاً ليناسب عرض الموبايل */
+  background: rgba(255, 255, 255, 0.03);
 }
 
-.rank-badge {
-  padding: 2px 8px;
+/* --- 7. الأدوار والحالات (اللمسات الجديدة) --- */
+.role-badge {
+  font-size: 0.65rem;
+  padding: 2px 5px;
   border-radius: 4px;
   font-weight: bold;
+  display: inline-block;
 }
 
-/* --- 7. تعديلات إضافية خاصة بالشاشات الصغيرة جدًا --- */
-@media (max-width: 480px) {
-  .main-header {
-    padding: 10px 15px;
-  }
+.role-leader {
+  color: var(--primary-gold);
+  border: 1px solid var(--primary-gold);
+  background: rgba(255, 204, 0, 0.1);
+}
 
-  .header-right {
-    display: none; /* إخفاء النص الطويل في اليمين لتوفير مساحة للأزرار */
-  }
+.role-member {
+  color: var(--text-gray);
+  border: 1px solid var(--glass-border);
+}
 
-  .action-item {
-    width: 36px !important;
-    height: 36px !important;
-  }
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 4px;
+}
 
+.online {
+  background: var(--success-green);
+  box-shadow: 0 0 5px var(--success-green);
+}
+.offline {
+  background: #555;
+}
+
+/* --- 8. زر تصفير النقاط (Reset Points) --- */
+.danger-zone-container {
+  margin-top: 15px;
+  border-top: 1px solid var(--glass-border);
+  padding-top: 15px;
+  text-align: center;
+}
+
+.reset-points-btn {
+  background: rgba(255, 68, 68, 0.1);
+  color: var(--error-red);
+  border: 1px solid var(--error-red);
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  cursor: pointer;
+  font-family: "Orbitron", sans-serif;
+  transition: 0.3s;
+}
+
+.reset-points-btn:active {
+  /* تأثير عند اللمس في الموبايل */
+  background: var(--error-red);
+  color: #fff;
+}
+
+/* --- 9. تحسين الـ Scrollbar للجداول --- */
+.table-responsive::-webkit-scrollbar {
+  height: 4px;
+}
+
+.table-responsive::-webkit-scrollbar-thumb {
+  background: var(--primary-gold);
+  border-radius: 10px;
+}
+
+/* --- 10. التعديلات النهائية للموبايل الصغير جداً --- */
+@media (max-width: 360px) {
   .brand-main {
-    font-size: 0.8rem;
+    font-size: 0.75rem;
   }
-
-  .squad-card {
-    padding: 20px !important;
+  .action-item {
+    width: 32px !important;
+    height: 32px !important;
   }
-}
-
-/* --- 8. تأثيرات --- */
-.tournament-live-glow {
-  animation: mobile-pulse 2s infinite;
-}
-
-@keyframes mobile-pulse {
-  0% {
-    box-shadow: 0 0 0 0 rgba(0, 242, 255, 0.4);
-  }
-  70% {
-    box-shadow: 0 0 0 8px rgba(0, 242, 255, 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(0, 242, 255, 0);
+  td {
+    padding: 8px 5px;
+    font-size: 0.7rem;
   }
 }

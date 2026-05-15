@@ -1,3 +1,5 @@
+const Team = require("../models/Team");
+
 const rankWeights = {
   "mythic glory": 100,
   mythic: 80,
@@ -16,116 +18,161 @@ exports.balanceTeams = async (req, res) => {
       return res.status(400).json({ message: "بيانات الأعضاء غير صالحة" });
     }
 
-    // 1. الفلترة الصارمة: فقط اللاعب الجاهز (isActive) يدخل القرعة
     let activePlayers = members.filter((p) => p.isActive === true);
+    const totalTeamsCount = Math.floor(activePlayers.length / 5);
 
-    if (activePlayers.length < 5) {
+    if (totalTeamsCount === 0) {
       return res.status(400).json({
-        message: `العدد غير كافٍ. الجاهزون الآن: ${activePlayers.length}، نحتاج 5 على الأقل.`,
+        message: `العدد غير كافٍ. الجاهزون: ${activePlayers.length}، نحتاج 5 على الأقل.`,
       });
     }
 
-    // تجهيز البيانات وترتيبها حسب القوة
-    let processedPlayers = activePlayers
-      .map((p) => {
-        // تأكد من مطابقة اسم الرتبة مع القاموس (تحويل لـ Lowercase)
-        const rankKey = (p.highestRank || "").toLowerCase();
-        return {
-          id: p._id || p.id,
-          username: p.username,
-          primaryLane: p.primaryLane,
-          secondaryLane: p.secondaryLane,
-          rankPower: rankWeights[rankKey] || 10,
-          isHuman: !p.isBot,
-        };
-      })
-      .sort((a, b) => b.rankPower - a.rankPower);
-
-    // 2. توزيع اللاعبين في سلال الأدوار (Buckets)
-    const buckets = {
+    const pools = {
       Jungle: [],
       "Mid Lane": [],
       "Gold Lane": [],
       "Exp Lane": [],
       Roaming: [],
     };
-    const waitingPool = [];
 
-    processedPlayers.forEach((p) => {
-      if (buckets[p.primaryLane]) {
-        buckets[p.primaryLane].push(p);
+    activePlayers.forEach((p) => {
+      const playerData = {
+        id: p._id || p.id,
+        username: p.username,
+        primaryLane: p.primaryLane,
+        secondaryLane: p.secondaryLane,
+        rankPower: rankWeights[(p.highestRank || "").toLowerCase()] || 10,
+        assignType: "Primary",
+      };
+
+      if (pools[playerData.primaryLane]) {
+        pools[playerData.primaryLane].push(playerData);
       } else {
-        waitingPool.push(p);
+        const smallestLane = allLanes.reduce((a, b) =>
+          pools[a].length <= pools[b].length ? a : b,
+        );
+        pools[smallestLane].push(playerData);
       }
     });
 
-    const totalTeamsCount = Math.floor(processedPlayers.length / 5);
+    for (let lane of allLanes) {
+      while (pools[lane].length < totalTeamsCount) {
+        let foundFromSecondary = false;
+
+        for (let otherLane of allLanes) {
+          if (otherLane === lane || pools[otherLane].length <= totalTeamsCount)
+            continue;
+
+          const pIdx = pools[otherLane].findIndex(
+            (p) => p.secondaryLane === lane,
+          );
+          if (pIdx !== -1) {
+            const player = pools[otherLane].splice(pIdx, 1)[0];
+            player.assignType = "Secondary";
+            pools[lane].push(player);
+            foundFromSecondary = true;
+            break;
+          }
+        }
+
+        if (!foundFromSecondary) {
+          const sourceLane = allLanes.find(
+            (l) => pools[l].length > totalTeamsCount,
+          );
+          if (sourceLane) {
+            const player = pools[sourceLane].shift();
+            player.assignType = "Autofill";
+            pools[lane].push(player);
+          } else {
+            break;
+          }
+        }
+      }
+    }
+
+    allLanes.forEach((lane) => {
+      pools[lane].sort((a, b) => b.rankPower - a.rankPower);
+    });
 
     let finalTeams = Array.from({ length: totalTeamsCount }, (_, i) => ({
       id: i + 1,
+      name: `فريق ${i + 1}`,
       players: [],
-      filledLanes: [],
       totalPower: 0,
     }));
 
-    // --- المرحلة الأولى: توزيع الأدوار الأساسية (Primary) مع موازنة القوة ---
     allLanes.forEach((lane) => {
-      // موازنة: إعطاء الفريق الأضعف حالياً الأولوية في اختيار اللاعب القادم من السلة
-      finalTeams.sort((a, b) => a.totalPower - b.totalPower);
-
-      finalTeams.forEach((team) => {
-        if (buckets[lane].length > 0) {
-          const player = buckets[lane].shift();
-          addPlayerToTeam(player, lane, team, "Primary");
+      for (let i = 0; i < totalTeamsCount; i++) {
+        const player = pools[lane][i];
+        if (player) {
+          finalTeams[i].players.push({
+            id: player.id,
+            username: player.username,
+            assignedLane: lane,
+            assignType: player.assignType,
+            rankPower: player.rankPower,
+          });
+          finalTeams[i].totalPower += player.rankPower;
         }
-      });
+      }
     });
 
-    // --- المرحلة الثانية: استخدام الأدوار الثانوية (Secondary) لسد النقص ---
-    finalTeams.forEach((team) => {
-      allLanes.forEach((lane) => {
-        if (!team.filledLanes.includes(lane)) {
-          for (let sourceLane of allLanes) {
-            const pIdx = buckets[sourceLane].findIndex(
-              (p) => p.secondaryLane === lane,
-            );
-            if (pIdx !== -1) {
-              const player = buckets[sourceLane].splice(pIdx, 1)[0];
-              addPlayerToTeam(player, lane, team, "Secondary");
-              break;
-            }
-          }
-        }
-      });
-    });
-
-    // --- المرحلة الثالثة: الملء التلقائي (Autofill) ---
-    const remainingPlayers = [...waitingPool, ...Object.values(buckets).flat()];
-
-    finalTeams.forEach((team) => {
-      allLanes.forEach((lane) => {
-        if (!team.filledLanes.includes(lane) && remainingPlayers.length > 0) {
-          const player = remainingPlayers.shift();
-          addPlayerToTeam(player, lane, team, "Autofill");
-        }
-      });
-    });
+    const unassigned = allLanes.flatMap((lane) =>
+      pools[lane].slice(totalTeamsCount),
+    );
 
     res.status(200).json({
       success: true,
       teams: finalTeams,
-      unassigned: remainingPlayers, // هؤلاء اللاعبون الفائضون (إذا كان العدد ليس مضاعفات 5)
+      unassigned,
     });
   } catch (error) {
     console.error("Matchmaking Error:", error);
     res
       .status(500)
-      .json({ message: "حدث خطأ أثناء توزيع الفرق", error: error.message });
+      .json({ message: "حدث خطأ أثناء التوزيع", error: error.message });
   }
 };
 
-function addPlayerToTeam(player, lane, team, type) {
-  team.players.push({ ...player, assignedLane: lane, assignType: type });
-  team.filledLanes.push(lane);
-  team.totalPower += player.rankPower;
-}
+exports.saveBalancedTeams = async (req, res) => {
+  try {
+    const { teams } = req.body;
+    const userId = req.user.id || req.user._id;
+
+    if (!teams || !Array.isArray(teams)) {
+      return res.status(400).json({ message: "لا توجد فرق لحفظها" });
+    }
+
+    const squad = await Team.findOne({
+      $or: [{ leader: userId }, { coLeaders: userId }, { members: userId }],
+    });
+
+    if (!squad) return res.status(404).json({ message: "السكواد غير موجود" });
+
+    const isManager =
+      String(squad.leader) === String(userId) ||
+      (squad.coLeaders || []).some(
+        (cl) => String(cl._id || cl) === String(userId),
+      );
+
+    if (!isManager)
+      return res.status(403).json({ message: "صلاحية غير كافية" });
+
+    squad.eliteTeams = teams.map((team, idx) => ({
+      name: team.name || `فريق ${idx + 1}`,
+      players: team.players.map((p) => ({
+        user: p.id,
+        username: p.username,
+        assignedLane: p.assignedLane,
+        assignType: p.assignType,
+      })),
+    }));
+
+    squad.balancedTeamsGeneratedAt = new Date();
+    await squad.save();
+
+    res.status(200).json({ success: true, eliteTeams: squad.eliteTeams });
+  } catch (error) {
+    res.status(500).json({ message: "فشل الحفظ", error: error.message });
+  }
+};

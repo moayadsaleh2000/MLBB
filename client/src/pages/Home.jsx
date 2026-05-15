@@ -5,25 +5,23 @@ import {
   FaBell,
   FaShieldAlt,
   FaUserCircle,
-  FaSignOutAlt,
   FaGamepad,
   FaMedal,
   FaTrophy,
   FaUsers,
   FaListUl,
+  FaTrashAlt,
 } from "react-icons/fa";
 import axios from "axios";
 import Swal from "sweetalert2";
 import { io } from "socket.io-client";
 import "./Home.css";
 
-// 1. تحديد الرابط بشكل ديناميكي
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 const Home = () => {
   const navigate = useNavigate();
 
-  // States
   const [user, setUser] = useState(null);
   const [displayTeams, setDisplayTeams] = useState([]);
   const [myFullTeam, setMyFullTeam] = useState(null);
@@ -36,7 +34,7 @@ const Home = () => {
 
   const token = localStorage.getItem("token");
 
-  // 2. تحديث دوال جلب البيانات لاستخدام API_URL
+  // --- دالة جلب البيانات الأساسية (تحديث صامت في الخلفية) ---
   const fetchDashboardData = useCallback(async () => {
     try {
       if (!token) {
@@ -46,14 +44,14 @@ const Home = () => {
 
       const headers = { Authorization: `Bearer ${token}` };
 
-      // جلب بيانات البروفايل
+      // 1. بيانات البروفايل
       const resUser = await axios.get(`${API_URL}/api/tournament/profile`, {
         headers,
       });
       const currentUser = resUser.data;
       setUser(currentUser);
 
-      // جلب أفضل السكوادات
+      // 2. بيانات السكوادات الرسمية
       const resTeams = await axios.get(`${API_URL}/api/tournament/teams`, {
         headers,
       });
@@ -62,7 +60,7 @@ const Home = () => {
       );
       setDisplayTeams(officialSquads.slice(0, 4));
 
-      // جلب بيانات سكواد المستخدم
+      // 3. بيانات السكواد الخاص بي
       const resMyTeam = await axios.get(`${API_URL}/api/tournament/my-team`, {
         headers,
       });
@@ -73,16 +71,17 @@ const Home = () => {
         const currentUserId = currentUser._id || currentUser.id;
         const leaderId = teamData.leader?._id || teamData.leader;
 
+        // تفقد الإشعارات للقادة فقط
         if (currentUserId === leaderId) {
           const reqRes = await axios
             .get(`${API_URL}/api/tournament/team/requests`, { headers })
             .catch(() => ({ data: [] }));
-
           if (reqRes.data && reqRes.data.length > 0) setHasNewNotif(true);
         }
 
         if (teamData.announcement) setHasNewNotif(true);
 
+        // تفقد حالة الانتظار والتصفيات
         const resQueue = await axios.get(
           `${API_URL}/api/tournament/qualifying/queue`,
           { headers },
@@ -98,19 +97,61 @@ const Home = () => {
         );
         setActiveTournament(resActive.data);
       }
-
-      setLoading(false);
     } catch (err) {
       console.error("Dashboard Sync Error:", err);
       if (err.response?.status === 401) {
         localStorage.clear();
         navigate("/");
       }
-      setLoading(false);
+    } finally {
+      setLoading(false); // يتم الإغلاق فقط بعد أول جلب
     }
   }, [token, navigate]);
 
-  // 3. تحديث دوال القبول والرفض
+  // --- تصفير النقاط ---
+  const handleResetPoints = async () => {
+    const result = await Swal.fire({
+      title: "تصفير نقاط السكواد؟",
+      text: "سيتم إعادة نقاط جميع الأعضاء إلى 0، هل أنت متأكد من هذه الخطوة؟",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#d33",
+      cancelButtonColor: "#3085d6",
+      confirmButtonText: "نعم، صفر الآن",
+      cancelButtonText: "إلغاء",
+      background: "#0a0e14",
+      color: "#fff",
+    });
+
+    if (result.isConfirmed) {
+      try {
+        const headers = { Authorization: `Bearer ${token}` };
+        await axios.post(
+          `${API_URL}/api/tournament/team/reset-members-points`,
+          {},
+          { headers },
+        );
+        Swal.fire({
+          title: "تم التصفير!",
+          text: "تم مسح نقاط جميع المحاربين بنجاح.",
+          icon: "success",
+          background: "#0a0e14",
+          color: "#fff",
+        });
+        fetchDashboardData(); // تحديث فوري بعد التصفير
+      } catch (err) {
+        Swal.fire({
+          title: "خطأ",
+          text: err.response?.data?.error || "فشل تصفير النقاط",
+          icon: "error",
+          background: "#0a0e14",
+          color: "#fff",
+        });
+      }
+    }
+  };
+
+  // --- قبول ورفض الطلبات ---
   const handleAcceptRequest = useCallback(
     async (userId) => {
       try {
@@ -147,6 +188,7 @@ const Home = () => {
     [token, fetchDashboardData],
   );
 
+  // ربط الدوال بالنافذة لـ Swal
   useEffect(() => {
     window.acceptReq = (id) => handleAcceptRequest(id);
     window.rejectReq = (id) => handleRejectRequest(id);
@@ -156,15 +198,14 @@ const Home = () => {
     };
   }, [handleAcceptRequest, handleRejectRequest]);
 
-  // 4. تحديث Socket.io ليستخدم API_URL
+  // --- التحديث التلقائي والسوكيت ---
   useEffect(() => {
+    // 1. الجلب الأول عند الدخول
     fetchDashboardData();
+
+    // 2. إعداد الـ Socket للرسائل اللحظية جداً
     const socket = io(API_URL, { auth: { token } });
-
-    socket.on("pointsUpdated", () => {
-      fetchDashboardData();
-    });
-
+    socket.on("pointsUpdated", () => fetchDashboardData());
     socket.on("tournamentStarted", (newData) => {
       setActiveTournament(newData);
       Swal.fire({
@@ -173,28 +214,26 @@ const Home = () => {
         icon: "info",
         background: "#0a0e14",
         color: "#fff",
-        confirmButtonColor: "#00d4ff",
-        confirmButtonText: "دخول الساحة",
       }).then(() => navigate("/matches"));
     });
-
     socket.on("qualifyingQueueUpdated", (data) => {
       setQueueCount(data.count);
       fetchDashboardData();
     });
+    socket.on("newJoinRequest", () => setHasNewNotif(true));
 
-    socket.on("newJoinRequest", () => {
-      setHasNewNotif(true);
-    });
-
-    const interval = setInterval(fetchDashboardData, 60000);
+    // 3. الـ Polling: تحديث تلقائي كل 10 ثوانٍ (لضمان المزامنة في حال فشل السوكيت)
+    const interval = setInterval(() => {
+      fetchDashboardData();
+    }, 10000);
 
     return () => {
       socket.disconnect();
-      clearInterval(interval);
+      clearInterval(interval); // تنظيف التايمر عند مغادرة الصفحة
     };
   }, [fetchDashboardData, token, navigate]);
 
+  // ترتيب الأعضاء حسب النقاط
   const visibleMembers = useMemo(() => {
     if (!myFullTeam || !myFullTeam.members) return [];
     const sorted = [...myFullTeam.members].sort(
@@ -203,9 +242,10 @@ const Home = () => {
     return showAllMembers ? sorted : sorted.slice(0, 10);
   }, [myFullTeam, showAllMembers]);
 
+  // التعامل مع الإشعارات
   const handleBellClick = async () => {
     setHasNewNotif(false);
-    const currentUserId = user._id || user.id;
+    const currentUserId = user?._id || user?.id;
     const isLeader =
       myFullTeam &&
       currentUserId === (myFullTeam.leader?._id || myFullTeam.leader);
@@ -246,20 +286,18 @@ const Home = () => {
           <div style="text-align: left;">
             <div style="font-weight: bold; color: #fff;">${req.username || "Unknown Player"}</div>
             <div style="font-size: 0.8rem; color: #aaa;">Rank: ${req.highestRank || "N/A"}</div>
-            <div style="font-size: 0.7rem; color: #00d4ff;">ID: ${req.gameId || ""}</div>
           </div>
           <div>
             <button onclick="window.acceptReq('${req._id}')" style="background: #d4af37; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; color: #000; font-weight: bold; margin-right: 5px;">قبول</button>
             <button onclick="window.rejectReq('${req._id}')" style="background: #d33; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; color: #fff;">رفض</button>
           </div>
-        </div>
-      `,
+        </div>`,
         )
         .join("");
 
       Swal.fire({
         title: '<span style="color: #d4af37;">طلبات الانضمام</span>',
-        html: `<div style="max-height: 350px; overflow-y: auto; padding-right: 5px;">${requestsHtml}</div>`,
+        html: `<div style="max-height: 350px; overflow-y: auto;">${requestsHtml}</div>`,
         showConfirmButton: false,
         background: "#0a0e14",
         color: "#fff",
@@ -275,6 +313,24 @@ const Home = () => {
       navigate("/matches");
       return;
     }
+    const currentUserId = user?._id || user?.id;
+    const isLeader =
+      myFullTeam &&
+      currentUserId === (myFullTeam.leader?._id || myFullTeam.leader);
+    const isCoLeader =
+      myFullTeam &&
+      myFullTeam.coLeaders?.some((cl) => (cl._id || cl) === currentUserId);
+
+    if (!isLeader && !isCoLeader) {
+      Swal.fire({
+        title: "تنبيه",
+        text: "يجب على قائد السكواد التسجيل أولاً",
+        icon: "warning",
+        background: "#0a0e14",
+        color: "#fff",
+      });
+      return;
+    }
 
     try {
       const headers = { Authorization: `Bearer ${token}` };
@@ -283,42 +339,17 @@ const Home = () => {
         {},
         { headers },
       );
-
       setIsInQueue(true);
+      navigate("/matches");
+    } catch (err) {
       Swal.fire({
-        title: '<span style="color: #d4af37;">تم دخول الساحة</span>',
-        text: "أنت الآن في قائمة الانتظار، جاري تحويلك...",
-        icon: "success",
-        timer: 1500,
-        showConfirmButton: false,
+        title: "عذراً",
+        text: err.response?.data?.error || "حدث خطأ",
+        icon: "error",
         background: "#0a0e14",
         color: "#fff",
-      }).then(() => {
-        navigate("/matches");
       });
-    } catch (err) {
-      if (
-        err.response?.status === 400 ||
-        err.response?.data?.error?.includes("already")
-      ) {
-        setIsInQueue(true);
-        navigate("/matches");
-      } else {
-        Swal.fire({
-          title: "عذراً",
-          text: err.response?.data?.error || "حدث خطأ أثناء التسجيل",
-          icon: "error",
-          background: "#0a0e14",
-          color: "#fff",
-        });
-      }
     }
-  };
-
-  const handleLogout = () => {
-    // خروج سريع: نرجع لصفحة الدخول بدون حذف التوكن
-    sessionStorage.setItem("manualExit", "1");
-    navigate("/", { replace: true });
   };
 
   if (loading) return <div className="loader">LOADING BATTLEFIELD...</div>;
@@ -331,35 +362,23 @@ const Home = () => {
   const isCoLeader =
     myFullTeam &&
     myFullTeam.coLeaders?.some((cl) => (cl._id || cl) === currentUserId);
-  const canAccessTournament = isLeader || isCoLeader;
+  const canSeeTrophy =
+    isLeader || isCoLeader || isInQueue || !!activeTournament;
 
   return (
     <div className="home-wrapper">
       <header className="main-header">
         <div className="header-left">
           <div
-            className="action-item logout"
-            onClick={handleLogout}
-            title="Logout"
-          >
-            <FaSignOutAlt />
-          </div>
-          <div
             className="action-item profile-crest"
             onClick={() => navigate("/profile")}
-            title="Profile"
           >
             <FaUserCircle />
           </div>
-          {canAccessTournament && (
+          {canSeeTrophy && (
             <div
               className={`action-item qualifying-btn ${isInQueue ? "in-queue-active" : ""} ${activeTournament ? "tournament-live-glow" : ""}`}
               onClick={handleQualifyingClick}
-              title={
-                activeTournament
-                  ? "Tournament Live!"
-                  : "Register for Qualifying"
-              }
             >
               <FaTrophy
                 className={
@@ -375,22 +394,11 @@ const Home = () => {
               )}
             </div>
           )}
-          <div className="action-item skill-icon" title="Capture Screen">
-            <FaCamera />
-          </div>
-          <div
-            className={`action-item ${hasNewNotif ? "bell-active-glow" : ""}`}
-            onClick={handleBellClick}
-            title="Notifications"
-          >
+          <div className="action-item" onClick={handleBellClick}>
             <FaBell />
             {hasNewNotif && <span className="red-notif-dot"></span>}
           </div>
-          <div
-            className="action-item"
-            onClick={() => navigate("/squad")}
-            title="My Squad"
-          >
+          <div className="action-item" onClick={() => navigate("/squad")}>
             <FaShieldAlt />
           </div>
         </div>
@@ -415,22 +423,19 @@ const Home = () => {
                 key={team._id}
                 className={`squad-card ${isMyTeam ? "active-squad-glow" : ""}`}
               >
-                <div className="squad-card-content">
-                  <h3 className={isMyTeam ? "gold-text" : ""}>{team.name}</h3>
-                  <div className="squad-stats-mini">
-                    <div className="member-count">
-                      <FaUsers />{" "}
-                      <span>{team.members?.length || 0} Members</span>
-                    </div>
-                    <div className="points-tag">{team.points || 0} PTS</div>
-                  </div>
-                  <button
-                    className={`squad-action-btn ${isMyTeam ? "gold-btn" : ""}`}
-                    onClick={() => navigate("/squad")}
-                  >
-                    {isMyTeam ? "MANAGE" : "VIEW"}
-                  </button>
+                <h3>{team.name}</h3>
+                <div className="squad-stats-mini">
+                  <span>
+                    <FaUsers /> {team.members?.length || 0}
+                  </span>
+                  <div className="points-tag">{team.points || 0} PTS</div>
                 </div>
+                <button
+                  className={`squad-action-btn ${isMyTeam ? "gold-btn" : ""}`}
+                  onClick={() => navigate("/squad")}
+                >
+                  {isMyTeam ? "MANAGE" : "VIEW"}
+                </button>
               </div>
             );
           })}
@@ -438,9 +443,10 @@ const Home = () => {
       </section>
 
       <div className="stats-dashboard-row">
+        {/* جدول تصنيف السكوادات */}
         <div className="glass-panel">
           <div className="panel-header">
-            <FaShieldAlt className="gold-icon" /> <h3>RANKINGS</h3>
+            <h3>RANKINGS</h3>
           </div>
           <div className="table-responsive">
             <table>
@@ -467,35 +473,32 @@ const Home = () => {
           </div>
         </div>
 
+        {/* جدول أعضاء السكواد */}
         <div className="glass-panel gold-border-panel">
           <div
             className="panel-header"
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}
+            style={{ display: "flex", justifyContent: "space-between" }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
               <FaMedal className="gold-icon" />
-              <h3>{showAllMembers ? "ALL WARRIORS" : "SQUAD TOP 10"}</h3>
+              <h3>{showAllMembers ? "ALL WARRIORS" : "TOP 10"}</h3>
+              {(isLeader || isCoLeader) && (
+                <button
+                  onClick={handleResetPoints}
+                  className="reset-points-btn"
+                >
+                  <FaTrashAlt /> تصفير
+                </button>
+              )}
             </div>
             {myFullTeam?.members?.length > 10 && (
               <div
                 className="toggle-view-btn"
                 onClick={() => setShowAllMembers(!showAllMembers)}
-                style={{
-                  cursor: "pointer",
-                  color: "#d4af37",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                }}
               >
-                <span style={{ fontSize: "0.7rem", fontWeight: "bold" }}>
-                  {showAllMembers ? "MINIMIZE" : "VIEW ALL"}
+                <span style={{ fontSize: "0.7rem" }}>
+                  {showAllMembers ? "MINIMIZE" : "ALL"}
                 </span>
-                <FaListUl style={{ fontSize: "1rem" }} />
               </div>
             )}
           </div>
@@ -516,7 +519,7 @@ const Home = () => {
                 </tr>
               </thead>
               <tbody>
-                {myFullTeam && myFullTeam.members ? (
+                {myFullTeam?.members ? (
                   visibleMembers.map((m, idx) => (
                     <tr
                       key={m._id || idx}
@@ -537,9 +540,7 @@ const Home = () => {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="3" className="solo-message-cell">
-                      NO SQUAD DATA
-                    </td>
+                    <td colSpan="3">NO DATA</td>
                   </tr>
                 )}
               </tbody>

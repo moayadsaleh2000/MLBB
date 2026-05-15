@@ -1,7 +1,26 @@
 const User = require("../models/User");
 const Team = require("../models/Team");
+const Tournament = require("../models/Tournament");
 const Announcement = require("../models/Announcement");
 const jwt = require("jsonwebtoken");
+
+const USERNAME_CHANGE_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000;
+
+const canChangeUsername = (user) => {
+  if (!user?.lastUsernameChangeAt) return true;
+  return (
+    Date.now() - new Date(user.lastUsernameChangeAt).getTime() >=
+    USERNAME_CHANGE_COOLDOWN_MS
+  );
+};
+
+const daysUntilUsernameChange = (user) => {
+  if (!user?.lastUsernameChangeAt || canChangeUsername(user)) return 0;
+  const remaining =
+    USERNAME_CHANGE_COOLDOWN_MS -
+    (Date.now() - new Date(user.lastUsernameChangeAt).getTime());
+  return Math.ceil(remaining / (24 * 60 * 60 * 1000));
+};
 
 // --- 1. تسجيل الدخول ---
 exports.loginPlayer = async (req, res) => {
@@ -34,7 +53,6 @@ exports.loginPlayer = async (req, res) => {
               : "New Squad"
             : "Solo Player",
         },
-        // ضمان وجود حقول النقاط للمستخدمين الجدد
         $setOnInsert: { trainingPoints: 0, qualificationPoints: 0 },
       },
       { returnDocument: "after", upsert: true },
@@ -106,6 +124,11 @@ exports.getUserProfile = async (req, res) => {
 // --- 3. تحديث بيانات البروفايل ---
 exports.updateProfile = async (req, res) => {
   try {
+    const userId = req.user.id || req.user._id;
+    const currentUser = await User.findById(userId);
+    if (!currentUser)
+      return res.status(404).json({ message: "المستخدم غير موجود" });
+
     const updates = {
       gameId: req.body.gameId,
       highestRank: req.body.highestRank,
@@ -114,21 +137,49 @@ exports.updateProfile = async (req, res) => {
       primaryLane: req.body.primaryLane,
       secondaryLane: req.body.secondaryLane,
     };
+
+    if (req.body.username !== undefined) {
+      const trimmed = String(req.body.username).trim();
+      if (!trimmed)
+        return res.status(400).json({ message: "اسم المستخدم مطلوب" });
+
+      if (trimmed !== currentUser.username) {
+        if (!canChangeUsername(currentUser)) {
+          const days = daysUntilUsernameChange(currentUser);
+          return res.status(400).json({
+            message: `يمكنك تغيير الاسم مرة واحدة كل شهر. انتظر ${days} يوماً.`,
+            code: "USERNAME_COOLDOWN",
+            daysRemaining: days,
+          });
+        }
+        const taken = await User.findOne({
+          username: trimmed,
+          _id: { $ne: userId },
+        });
+        if (taken)
+          return res
+            .status(400)
+            .json({ message: "اسم المستخدم مستخدم مسبقاً" });
+        updates.username = trimmed;
+        updates.lastUsernameChangeAt = new Date();
+      }
+    }
+
     Object.keys(updates).forEach(
       (key) => updates[key] === undefined && delete updates[key],
     );
     const user = await User.findByIdAndUpdate(
-      req.user.id || req.user._id,
+      userId,
       { $set: updates },
       { returnDocument: "after" },
-    );
+    ).select("-password");
     res.status(200).json(user);
   } catch (error) {
     res.status(500).json({ message: "Update failed", error: error.message });
   }
 };
 
-// --- 4. جلب جميع الفرق (معدلة لترتيب النقاط وجلب بيانات الأعضاء) ---
+// --- 4. جلب جميع الفرق ---
 exports.getAllTeams = async (req, res) => {
   try {
     const teams = await Team.find({ isTemporary: false })
@@ -140,34 +191,27 @@ exports.getAllTeams = async (req, res) => {
           "username status isActive isOnline highestRank primaryLane secondaryLane trainingPoints qualificationPoints",
         options: { sort: { trainingPoints: -1 } },
       });
-
-    if (!teams || teams.length === 0) return res.status(200).json([]);
-    res.status(200).json(teams);
+    res.status(200).json(teams || []);
   } catch (e) {
     res.status(500).json({ message: "حدث خطأ في جلب بيانات السكوادات" });
   }
 };
 
-// --- 5. جلب فريقي (معدلة لضمان وصول النقاط لجدول الـ Home) ---
+// --- 5. جلب فريقي ---
 exports.getMyTeam = async (req, res) => {
   try {
     const userId = req.user.id || req.user._id;
     const currentUser = await User.findById(userId).select(
       "teamId teamName isLeader",
     );
-
     const teamFilters = [
       { leader: userId },
       { members: userId },
       { coLeaders: userId },
     ];
-    if (currentUser?.teamId) {
-      teamFilters.push({ _id: currentUser.teamId });
-    }
+    if (currentUser?.teamId) teamFilters.push({ _id: currentUser.teamId });
 
-    let team = await Team.findOne({
-      $or: teamFilters,
-    })
+    let team = await Team.findOne({ $or: teamFilters })
       .populate({
         path: "members",
         select:
@@ -177,7 +221,6 @@ exports.getMyTeam = async (req, res) => {
       .populate("requests", "username highestRank primaryLane gameId")
       .populate("leader", "username");
 
-    // إصلاح تلقائي: إن كان قائدًا ولا يوجد فريق، أنشئ/استرجع فريقه مباشرة.
     if (
       !team &&
       currentUser?.isLeader &&
@@ -207,40 +250,51 @@ exports.getMyTeam = async (req, res) => {
       await User.findByIdAndUpdate(userId, { $set: { teamId: team._id } });
     }
 
-    // إصلاح تلقائي: إذا الفريق موجود لكن المستخدم غير موجود ضمن members أضفه.
     if (team) {
       const isMember = team.members?.some(
-        (member) => member?._id?.toString() === userId.toString(),
+        (m) => m?._id?.toString() === userId.toString(),
       );
-      if (!isMember) {
+      if (!isMember)
         await Team.updateOne(
           { _id: team._id },
           { $addToSet: { members: userId } },
         );
-      }
     }
 
-    res.json(team || null);
+    if (!team) return res.json(null);
+    const teamPayload = team.toObject();
+    if (!teamPayload.activeTournamentId) {
+      const active = await Tournament.findOne({
+        squadId: team._id,
+        status: "active",
+        mode: { $in: ["training", "qualification", "qualifying"] },
+      })
+        .select("_id mode")
+        .sort({ createdAt: -1 })
+        .lean();
+      if (active) {
+        teamPayload.activeTournamentId = active._id;
+        teamPayload.activeTournamentMode = active.mode;
+      }
+    }
+    res.json(teamPayload);
   } catch (e) {
     res.status(500).json({ message: "Error" });
   }
 };
 
-// --- 6. الإعلانات (Announcements) ---
+// --- 6. الإعلانات ---
 exports.getLatestAnnouncement = async (req, res) => {
   try {
     const userId = req.user.id || req.user._id;
     const team = await Team.findOne({ members: userId });
-
     if (!team) return res.json(null);
-
     const announcement = await Announcement.findOne({ teamId: team._id })
       .sort({ createdAt: -1 })
       .populate("authorId", "username");
-
     res.json(announcement);
   } catch (e) {
-    res.status(500).json({ message: "Error fetching announcement" });
+    res.status(500).json({ message: "Error" });
   }
 };
 
@@ -257,7 +311,7 @@ exports.updateTeamAnnouncement = async (req, res) => {
     await Announcement.create({
       teamId: team._id,
       authorId: userId,
-      message: message,
+      message,
       type: type || "General",
     });
     res.status(200).json({ message: "تم النشر" });
@@ -278,7 +332,7 @@ exports.kickMember = async (req, res) => {
     if (!team) return res.status(403).json({ message: "صلاحية القائد فقط" });
     await User.findByIdAndUpdate(memberId, {
       teamName: "Solo Player",
-      teamId: null, // تأكد من تصفير الـ ID أيضاً
+      teamId: null,
       isLeader: false,
     });
     res.status(200).json({ message: "تم الطرد" });
@@ -331,7 +385,6 @@ exports.leaveTeam = async (req, res) => {
     const team = await Team.findOne({ members: userId });
     if (!team || team.leader.toString() === userId)
       return res.status(400).json({ message: "لا يمكن المغادرة" });
-
     await Team.updateOne(
       { _id: team._id },
       { $pull: { members: userId, coLeaders: userId } },
@@ -369,11 +422,8 @@ exports.respondToRequest = async (req, res) => {
     const team = await Team.findOne({
       $or: [{ leader: currentId }, { coLeaders: currentId }],
     });
-
     if (!team) return res.status(403).json({ message: "غير مصرح" });
-
     await Team.updateOne({ _id: team._id }, { $pull: { requests: userId } });
-
     if (action === "accept") {
       await Team.updateOne(
         { _id: team._id },
@@ -420,10 +470,8 @@ exports.generateBots = async (req, res) => {
   try {
     const team = await Team.findOne({ leader: req.user.id || req.user._id });
     if (!team) return res.status(404).json({ message: "للقادة فقط" });
-
     const ranks = ["Mythic Glory", "Mythic", "Legend", "Epic"];
     const lanes = ["Jungle", "Mid Lane", "Gold Lane", "Exp Lane", "Roaming"];
-
     const bots = Array.from({ length: 9 }).map((_, i) => ({
       username: `Bot_${Math.floor(Math.random() * 9999)}`,
       highestRank: ranks[Math.floor(Math.random() * ranks.length)],
@@ -433,21 +481,53 @@ exports.generateBots = async (req, res) => {
       isActive: true,
       isOnline: true,
       teamName: team.name,
-      teamId: team._id, // ربط البوت بالفريق
+      teamId: team._id,
       gameId: `MLBB-${Math.floor(100000 + Math.random() * 900000)}`,
       status: "Active",
       trainingPoints: 0,
       qualificationPoints: 0,
     }));
-
     const savedBots = await User.insertMany(bots);
     await Team.updateOne(
       { _id: team._id },
       { $push: { members: { $each: savedBots.map((b) => b._id) } } },
     );
-
     res.status(200).json({ message: "Bots added! ⚔️" });
   } catch (e) {
     res.status(500).json({ message: "Error", detail: e.message });
+  }
+};
+
+// --- 9. تصفير النقاط (Reset Points) ---
+exports.resetMembersPoints = async (req, res) => {
+  try {
+    const currentId = req.user.id || req.user._id;
+
+    // العثور على الفريق الذي يكون فيه المستخدم قائداً أو مساعداً
+    const team = await Team.findOne({
+      $or: [{ leader: currentId }, { coLeaders: currentId }],
+    });
+
+    if (!team) {
+      return res
+        .status(403)
+        .json({
+          error: "غير مصرح لك بتصفير النقاط أو لم يتم العثور على فريقك",
+        });
+    }
+
+    // تحديث نقاط جميع الأعضاء المنتمين لهذا الفريق إلى صفر
+    await User.updateMany(
+      { teamId: team._id },
+      { $set: { trainingPoints: 0 } },
+    );
+
+    res
+      .status(200)
+      .json({ message: "تم تصفير جميع نقاط أعضاء الفريق بنجاح 🛡️" });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ error: "حدث خطأ أثناء تصفير النقاط", detail: error.message });
   }
 };

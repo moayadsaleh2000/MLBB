@@ -157,6 +157,10 @@
   background: linear-gradient(135deg, #f39c12, #f1c40f);
 }
 
+.member-actions-bar {
+  border-color: rgba(212, 175, 55, 0.5);
+}
+
 /* --- تعديلات الهواتف الذكية (Responsive) --- */
 @media (max-width: 480px) {
   .roster-header h1 {

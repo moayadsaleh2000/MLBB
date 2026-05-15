@@ -35,6 +35,16 @@ router.post("/team/promote", protect, authController.promoteMember);
 router.delete("/team/disband", protect, authController.disbandTeam);
 router.post("/team/add-bots", protect, authController.generateBots);
 
+/**
+ * التحديث الجديد: تصفير نقاط أعضاء السكواد
+ * يسمح للقائد ومساعد القائد بإعادة تعيين نقاط التدريب لجميع الأعضاء
+ */
+router.post(
+  "/team/reset-members-points",
+  protect,
+  authController.resetMembersPoints,
+);
+
 // ==========================================
 // 3. روابط الإعلانات (Announcements)
 // ==========================================
@@ -59,6 +69,11 @@ router.post(
   "/matchmaking/balance",
   protect,
   matchmakingController.balanceTeams,
+);
+router.post(
+  "/matchmaking/save",
+  protect,
+  matchmakingController.saveBalancedTeams,
 );
 
 // ب) نظام التأهيل (Qualifying)

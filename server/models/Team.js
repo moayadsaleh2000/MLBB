@@ -41,6 +41,20 @@ const TeamSchema = new mongoose.Schema(
       type: Array,
       default: [],
     },
+    balancedTeamsGeneratedAt: {
+      type: Date,
+      default: null,
+    },
+    activeTournamentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Tournament",
+      default: null,
+    },
+    activeTournamentMode: {
+      type: String,
+      enum: ["training", "qualification", "qualifying", null],
+      default: null,
+    },
     lastQualifyingDate: {
       type: Date,
       default: null,

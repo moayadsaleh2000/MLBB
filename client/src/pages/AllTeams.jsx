@@ -1,12 +1,27 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaArrowRight, FaDumbbell, FaTrophy } from "react-icons/fa";
 import { GiShield } from "react-icons/gi";
 import axios from "axios";
+import { io } from "socket.io-client";
 import "./AllTeams.css";
 
 // استخدام الرابط الديناميكي
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
+const isQualificationMode = (mode) =>
+  mode === "qualification" || mode === "qualifying";
+
+const normalizeStoredTeams = (stored) =>
+  (stored || []).map((team, index) => ({
+    _id: team._id || team.id || `team-${index}`,
+    name: team.name || `فريق ${index + 1}`,
+    players: (team.players || []).map((p) => ({
+      _id: p._id || p.id,
+      username: p.username,
+      assignedLane: p.assignedLane,
+    })),
+  }));
 
 const AllTeams = () => {
   const navigate = useNavigate();
@@ -14,63 +29,97 @@ const AllTeams = () => {
   const [teams, setTeams] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isAuthorized, setIsAuthorized] = useState(false);
+  const [activeTournament, setActiveTournament] = useState(null);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!token) {
-        navigate("/login");
-        return;
-      }
+  const applySquadActiveTournament = (squad) => {
+    if (squad?.activeTournamentId) {
+      setActiveTournament({
+        _id: squad.activeTournamentId,
+        mode: squad.activeTournamentMode,
+      });
+    } else {
+      setActiveTournament(null);
+    }
+  };
 
-      try {
-        setLoading(true);
-        const headers = { Authorization: `Bearer ${token}` };
+  const fetchData = useCallback(async () => {
+    if (!token) {
+      navigate("/login");
+      return;
+    }
 
-        // جلب الملف الشخصي وبيانات السكواد
-        const [profileRes, teamDataRes] = await Promise.all([
-          axios.get(`${API_BASE_URL}/api/auth/profile`, { headers }),
-          axios.get(`${API_BASE_URL}/api/auth/my-team`, { headers }),
-        ]);
+    try {
+      setLoading(true);
+      const headers = { Authorization: `Bearer ${token}` };
 
-        const user = profileRes.data;
-        const squad = teamDataRes.data;
+      const [profileRes, teamDataRes] = await Promise.all([
+        axios.get(`${API_BASE_URL}/api/auth/profile`, { headers }),
+        axios.get(`${API_BASE_URL}/api/auth/my-team`, { headers }),
+      ]);
 
-        const userId = String(user._id);
-        const squadLeaderId = squad?.leader
-          ? String(squad.leader._id || squad.leader)
-          : null;
-        const coLeaderIds =
-          squad?.coLeaders?.map((cl) => String(cl._id || cl)) || [];
+      const user = profileRes.data;
+      const squad = teamDataRes.data;
 
-        // التحقق من الصلاحية (قائد أو مساعد)
-        const hasAccess =
-          user.role === "Leader" ||
-          user.role === "Co-Leader" ||
-          user.isLeader === true ||
-          userId === squadLeaderId ||
-          coLeaderIds.includes(userId);
+      const userId = String(user._id);
+      const squadLeaderId = squad?.leader
+        ? String(squad.leader._id || squad.leader)
+        : null;
+      const coLeaderIds =
+        squad?.coLeaders?.map((cl) => String(cl._id || cl)) || [];
 
-        setIsAuthorized(hasAccess);
+      const hasAccess =
+        user.role === "Leader" ||
+        user.role === "Co-Leader" ||
+        user.isLeader === true ||
+        userId === squadLeaderId ||
+        coLeaderIds.includes(userId);
 
-        if (squad?.members) {
-          // استدعاء منطق توزيع الفرق المتوازن (Matchmaking Logic)
-          const res = await axios.post(
-            `${API_BASE_URL}/api/auth/matchmaking/balance`,
-            { members: squad.members },
+      setIsAuthorized(hasAccess);
+      applySquadActiveTournament(squad);
+
+      if (!squad?.members) return;
+
+      if (hasAccess) {
+        const res = await axios.post(
+          `${API_BASE_URL}/api/auth/matchmaking/balance`,
+          { members: squad.members },
+          { headers },
+        );
+        if (res.data.success && res.data.teams?.length) {
+          const balanced = res.data.teams || [];
+          setTeams(balanced);
+          await axios.post(
+            `${API_BASE_URL}/api/auth/matchmaking/save`,
+            { teams: balanced },
             { headers },
           );
-          if (res.data.success) {
-            setTeams(res.data.teams || []);
-          }
         }
-      } catch (err) {
-        console.error("Fetch Error:", err);
-      } finally {
-        setLoading(false);
+      } else if (squad.eliteTeams?.length) {
+        setTeams(normalizeStoredTeams(squad.eliteTeams));
       }
-    };
-    fetchData();
+    } catch (err) {
+      console.error("Fetch Error:", err);
+    } finally {
+      setLoading(false);
+    }
   }, [token, navigate]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  useEffect(() => {
+    if (!token) return undefined;
+
+    const socket = io(API_BASE_URL, { auth: { token } });
+    socket.on("tournamentUpdated", () => {
+      fetchData();
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [token, fetchData]);
 
   const handleStartTournament = async (mode) => {
     try {
@@ -98,6 +147,7 @@ const AllTeams = () => {
 
       // التوجيه للجدول الزمني للبطولة المنشأة حديثاً
       if (res.data && res.data._id) {
+        setActiveTournament({ _id: res.data._id, mode });
         navigate(`/match-schedule/${res.data._id}`, { state: res.data });
       } else {
         alert("فشل السيرفر في إعادة معرف البطولة (ID)");
@@ -125,7 +175,11 @@ const AllTeams = () => {
 
       <div className="roster-container">
         {teams.length === 0 ? (
-          <p className="empty-msg">لا توجد فرق جاهزة حالياً</p>
+          <p className="empty-msg">
+            {isAuthorized
+              ? "لا توجد فرق جاهزة حالياً"
+              : "بانتظار توليد الفرق من القائد أو المساعد"}
+          </p>
         ) : (
           teams.map((team, index) => (
             <div
@@ -162,6 +216,29 @@ const AllTeams = () => {
             onClick={() => handleStartTournament("qualification")}
           >
             <FaTrophy /> بدء تأهيل
+          </button>
+        </div>
+      )}
+
+      {!isAuthorized && teams.length > 0 && activeTournament?._id && (
+        <div className="admin-actions-bar member-actions-bar">
+          <button
+            className={`action-btn ${
+              isQualificationMode(activeTournament.mode)
+                ? "qualify"
+                : "training"
+            }`}
+            onClick={() => navigate(`/match-schedule/${activeTournament._id}`)}
+          >
+            {isQualificationMode(activeTournament.mode) ? (
+              <>
+                <FaTrophy /> الانتقال للتأهيل
+              </>
+            ) : (
+              <>
+                <FaDumbbell /> الانتقال للتدريب
+              </>
+            )}
           </button>
         </div>
       )}
